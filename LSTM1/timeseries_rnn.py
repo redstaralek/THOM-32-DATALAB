@@ -6,14 +6,14 @@ from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
 from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
-import math, os, gc, sys, joblib, pandas as pd, numpy as np
-import tensorflow as tf
+import os, gc, joblib, pandas as pd, numpy as np
 from utils import *
 from inicializacao import *
 from matplotlib import pyplot as plt
 
 MODELO_PASTA = '__arquivos_rnn'
 MODELO_SUBPASTAS = os.listdir(MODELO_PASTA)
+STEPS_B, STEPS_F = 24, 24
 
 class rnn_aux:
 
@@ -53,13 +53,13 @@ class rnn_aux:
     return loaded_model
    
   @staticmethod
-  def pre_proc(dados_form, steps_b, steps_f, treinamento_e_salva_scalers, modelo_index=0):
+  def pre_proc(dados_form, treinamento_e_salva_scalers, modelo_index=0):
     #################################################################### PRÉ PROCESSAMENTO ################################################################## 
     df_input = pd.DataFrame(dados_form)
-    y_columns =   ["temp",             "hum",             "pres",            "rad",        
+    y_columns =   ["temp",             "hum",             "pres",        "rad",        
                    "pluv"]    
-    x_columns =   ["temp",             "hum",             "pres",            "rad",   
-                   "pres_delta",       "pluv",            "dia_ano",         "horario"]     
+    x_columns =   ["temp",             "hum",             "pres",        "rad",   
+                   "pluv",             "dia_ano",         "horario"]     
 
     df_input_x, df_input_y, scalers_y, scalers_x = [], [], RobustScaler(), RobustScaler()
     el_size_y, el_size_x = len(y_columns), len(x_columns)
@@ -84,42 +84,17 @@ class rnn_aux:
       print(f"2 x scaler={scalers_x}, x={df_input_x}")
       print(f"2 y scaler={scalers_y}, y={df_input_y}")
  
-    base_x, base_y = rnn_aux.to_supervised(df_input_x, df_input_y, steps_b, steps_f) 
+    base_x, base_y = rnn_aux.to_supervised(df_input_x, df_input_y) 
     
     return base_x, base_y, df_input_x, df_input_y,  el_size_y, el_size_x, scalers_x, scalers_y 
 
-   
+  
   @staticmethod
-  def inclui_compostas(n_array, aplica_transformacao_para_prod, estacao):
-    
-    result = []
-    for i in range(len(n_array)):  
-
-      if(aplica_transformacao_para_prod):  
-        transformada_temp_inversa = eval("lambda x: "+estacao.expressao_rev_temp)
-        transformada_hum_inversa  = eval("lambda x: "+estacao.expressao_rev_hum)
-        transformada_pres_inversa = eval("lambda x: "+estacao.expressao_rev_pres)
-        n_array[i][0]             = transformada_temp_inversa(float(n_array[i][0]))
-        n_array[i][1]             = transformada_hum_inversa( float(n_array[i][1])) 
-        n_array[i][2]             = transformada_pres_inversa(float(n_array[i][2]*100))/100  
-               
-      _rad =      n_array[i][3] if n_array[i][3]>200 else 0
-      result_linha = []
-      result_linha.append(n_array[i][0])                                                                              #temp
-      result_linha.append(proc_hum(n_array[i][1]))                                                                    #hum
-      result_linha.append(n_array[i][2])                                                                              #pres
-      result_linha.append(_rad)                                                                                       #rad
-      result_linha.append(round_025(n_array[i][4], n_array[i][1], n_array[i][5]) if n_array[i][4] > 0  else 0)        #pluv
-      result_linha.append(math.floor(n_array[i][5]*100) if n_array[i][5]>0 and n_array[i][5] is not None else 0)      #chuva
-      result.append(result_linha)
-    return np.array(result) 
-
-  @staticmethod
-  def to_supervised(x_input, y_input, steps_b, steps_f):
+  def to_supervised(x_input, y_input):
     x, y         = [], []  
     #loop de dias => supervised com janela móvel de 24h
-    for i in range(steps_b, len(x_input) - steps_f):   
-      _x_aux, _y_aux = np.array(x_input[i - steps_b : i]), np.array(y_input[i : i + steps_f])
+    for i in range(STEPS_B, len(x_input) - STEPS_F):   
+      _x_aux, _y_aux = np.array(x_input[i - STEPS_B : i]), np.array(y_input[i : i + STEPS_F])
       if(len(_x_aux) > 0):
         x.append(_x_aux) 
         y.append(_y_aux)     
@@ -127,7 +102,7 @@ class rnn_aux:
     return np.array(x), np.array(y)
 
   @staticmethod
-  def evaluate_model(Y_true_arg, y_predicted_arg, steps_b, steps_f):
+  def evaluate_model(Y_true_arg, y_predicted_arg):
     scores_mae    = [] 
     scores_rmse   = []
     scores_smape  = []
@@ -145,11 +120,11 @@ class rnn_aux:
       scores_smape.append(float(s))
       scores_ac.append(formata_2_casas(float(100-s)))   
       ac_cat.append(None)
-      ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, steps_b, steps_f) if i == 5 else None) 
+      ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, STEPS_B, STEPS_F) if i == 5 else None) 
       r_2.append(formata_2_casas(100*r2_score(Y_true, y_predicted))                                                   if i != 5 else None) 
 
       if(i==4):
-        obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, steps_b, steps_f, True)  
+        obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, STEPS_B, STEPS_F, True)  
         scores_mae[-1]    = formata_2_casas(obj_testagem["mae"])
         scores_rmse[-1]   = formata_2_casas(obj_testagem["rmse"])
         ac_pluv[-1]       = formata_2_casas(obj_testagem["ac_cat"]) 
@@ -169,11 +144,11 @@ class rnn_aux:
       } for i in range(len(scores_mae))]
  
   @staticmethod
-  def retorna_prev_e_erros(prev_test, Y_true, prev, steps_b, steps_f):
-    scores      = rnn_aux.evaluate_model(Y_true, prev_test, steps_b, steps_f) 
+  def retorna_prev_e_erros(prev_test, Y_true, prev):
+    scores      = rnn_aux.evaluate_model(Y_true, prev_test) 
     prev_finais = []
     # intervalos  = []
-    prev_list   = prev[-steps_f:].tolist()
+    prev_list   = prev[-STEPS_F:].tolist()
     for i in range(prev.shape[1]):
       prev_el = [(float(el[i]) if el[i] is not None else float(0.001)) for el in prev_list]
       prev_finais.append(prev_el) 
@@ -195,36 +170,37 @@ class rnn_aux:
     return lista_intervalo
 
 
-def treina_rnn(dados_form, steps_b, steps_f, iteracoes_teste= 24, modelo_index=0):     
+def treina_rnn(dados_form, modelo_index=0):     
 
-  X, Y, _, _, el_size_y, el_size_x, _, _ = rnn_aux.pre_proc(dados_form, steps_b, steps_f, True, modelo_index) 
+  X, Y, _, _, el_size_y, el_size_x, _, _ = rnn_aux.pre_proc(dados_form, True, modelo_index) 
 
   # ##################################################################### LSTM MODEL
-  early_stopping_monitor = EarlyStopping(monitor='mse', patience=15, verbose=1, mode='auto')
-  checkpointer = ModelCheckpoint(filepath = f"__arquivos_rnn/{MODELO_SUBPASTAS[modelo_index]}/checkpoint", verbose=1, save_best_only=True)
-  HIDDEN_LAYERS = 50
+  early_stopping_monitor = EarlyStopping(monitor='mse', patience=100, verbose=1, mode='auto')
+  checkpointer = ModelCheckpoint(filepath = f"__arquivos_rnn/{MODELO_SUBPASTAS[modelo_index]}/checkpoint", verbose=0, save_best_only=True)
+  HIDDEN_LAYERS = 500
 
-  model = keras.Sequential()  
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, input_shape=(steps_b, el_size_x), dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  # model.add(layers.Dropout(0.75))      
-  # model.add(layers.RepeatVector(steps_b))         
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Bidirectional(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5)))
-  model.add(layers.Dropout(0.75))
-  model.add(layers.TimeDistributed(layers.Dense(el_size_y)))   
+  model = keras.Sequential() 
+  # Encoder (bidirectional)
+  model.add(layers.Dropout(0.8))
+  model.add(layers.Bidirectional(
+    layers.LSTM(HIDDEN_LAYERS, input_shape=(STEPS_B, el_size_x), dropout=0.5)
+  ))
+  # Enc -> Dec
+  model.add(layers.RepeatVector(STEPS_F))    
+  # Decoder (unidirectional)
+  model.add(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5))
+  model.add(layers.Dropout(0.5))
+  model.add(layers.TimeDistributed(
+    layers.Dense(el_size_y, activation=layers.LeakyReLU(alpha=0.01))
+  ))   
 
   model = rnn_aux.compila(model)  
   history = model.fit(
     X, 
     Y,    
     validation_split = 0.2,
-    batch_size = 526,
-    epochs = 400, 
+    batch_size = 1024,
+    epochs = 1000, 
     shuffle = False,  
     callbacks=[early_stopping_monitor, checkpointer], 
     verbose=2,
@@ -242,9 +218,9 @@ def treina_rnn(dados_form, steps_b, steps_f, iteracoes_teste= 24, modelo_index=0
   plt.show()
 
    
-def previsao_rnn(dados_form, steps_b, steps_f, iteracoes_teste= 24, modelo_index=0):     
+def previsao_rnn(dados_form, iteracoes_teste= 24, modelo_index=0):     
 
-  X, Y, df_input_x, df_input_y, el_size_y, el_size_x, scalers_x, scalers_y = rnn_aux.pre_proc(dados_form, steps_b, steps_f, False, modelo_index) 
+  X, Y, df_input_x, df_input_y, el_size_y, el_size_x, scalers_x, scalers_y = rnn_aux.pre_proc(dados_form, False, modelo_index) 
 
   iteracoes_teste
   test_ratio = iteracoes_teste/len(X) 
@@ -259,10 +235,10 @@ def previsao_rnn(dados_form, steps_b, steps_f, iteracoes_teste= 24, modelo_index
   print(f"{modelo.metrics_names[1]}: {score[1]}" )
 
   #--------------- prepara prev ---------------
-  base_prev_x = np.array([df_input_x[-steps_b:,:]])
+  base_prev_x = np.array([df_input_x[-STEPS_B:,:]])
   # print(f"ÚLTIMOS 24 X USADOS (SCALED): \n {np.array([el for el in base_prev_x[:,:,:el_size_x]])}\n")
   # print(f"ÚLTIMOS 24 X USADOS (BRUTOS): \n {np.array([scalers_X.inverse_transform(el) for el in base_prev_x[:,:,:el_size_x]])}\n")  
-  base_prev_y = np.array([df_input_y[-steps_b:,:]])
+  base_prev_y = np.array([df_input_y[-STEPS_B:,:]])
   print(f"ÚLTIMOS 24 Y USADOS (SCALED): \n {np.array([el for el in base_prev_y[:,:,:el_size_y]])}\n")
   print(f"ÚLTIMOS 24 Y USADOS (BRUTOS): \n {np.array([scalers_y.inverse_transform(el) for el in base_prev_y[:,:,:el_size_y]])}\n")  
 
@@ -274,5 +250,5 @@ def previsao_rnn(dados_form, steps_b, steps_f, iteracoes_teste= 24, modelo_index
   prev_test     = np.array([scalers_y.inverse_transform(el) for el in df_pred_test]).reshape(-1,el_size_y)
   Y_true_test   = np.array(scalers_y.inverse_transform(Y_test.reshape(-1,el_size_y))) 
  
-  return rnn_aux.retorna_prev_e_erros(prev_test, Y_true_test, prev, steps_b, steps_f)
+  return rnn_aux.retorna_prev_e_erros(prev_test, Y_true_test, prev, STEPS_B, STEPS_F)
    
