@@ -4,43 +4,140 @@ from tensorflow.keras.models         import model_from_json,  model_from_json
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
-from sklearn.preprocessing           import RobustScaler
+from sklearn.preprocessing           import RobustScaler, StandardScaler
 from sklearn.model_selection         import train_test_split
 import os, gc, joblib, pandas as pd, numpy as np
 from utils import *
 from inicializacao import *
 from matplotlib import pyplot as plt
 
-MODELO_PASTA = '__arquivos_rnn'
-MODELO_SUBPASTAS = os.listdir(MODELO_PASTA)
-STEPS_B, STEPS_F = 24, 24
 
-class rnn_aux:
+# ======================== AUXILIARES =========================
+EPSLON = 0.0000001
+RND_ST = 142
+I_TESTE_PADRAO = 24
+ARQ_NORMAL = "normal"
+ARQ_ENC_DEC ="encoder_decoder"
+ARQ_ENC_DEC_BID = "encoder_decoder_bidirecional"
 
-  @staticmethod
-  def compila(model): 
-    model.compile(loss='mse', optimizer='nadam', metrics=['mse']) 
-    return model
+
+# =================== CLASSE DE HIPERPARÂMETROS ===================
+class MZDN_HP:
+  def __init__(self, grandezas, steps, error_f, h_layers=None, arq=None):
+    self.grandezas              = grandezas # [0] conterá X e [1] conterá Y
+    self.width_x, self.width_y  = len(self.grandezas[0]), len(self.grandezas[1])
+    self.steps_b, self.steps_f  = steps     # [0] conterá Back e [1] conterá Forward
+    self.error_f                = error_f
+    self.h_layers               = h_layers
+    self.arq                    = arq
+
+
+# ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
+class MZDN_HF:
   
-  @staticmethod
-  def carrega_e_compila(nome): 
-      loaded_model = rnn_aux.carrega_modelo(nome)
-      loaded_model.compile(   
-          loss='mse',
-          optimizer='nadam',   
-          metrics=['mse'], 
-          ) 
-      return loaded_model
+  # CONSTRUTORES
+  # Construtor 1: fornece apenas [diretorio] OU [modelo, scalers, diretorio] -> uso web!
+  def __init__(self, diretorio, modelo=None, scalers=None, debug=True):
+    
+    self.diretorio = diretorio
+    self.debug     = debug
+    self.only_prev = True
 
-  @staticmethod
-  def salva_modelo(model, nome): 
-    model_json = model.to_json()
-    with open(f"{nome}.json", "w") as json_file:
-        json_file.write(model_json) 
-    model.save_weights(f"{nome}.h5") 
-    print("Saved model to disk")
+    # Se infomou scalers usa. Senão -> busca no disco pelo dir
+    if(scalers is not None):
+      self.scalers_x = scalers[0]
+      self.scalers_y = scalers[1]
+    else:
+      self.scalers_x = joblib.load(f'{diretorio}/scalers_x.gz')
+      self.scalers_y = joblib.load(f'{diretorio}/scalers_y.gz')
+      
+    # Se infomou modelo usa. Senão -> busca no disco pelo dir
+    if(modelo is not None):
+      self.modelo    = modelo
+    else:
+      self.modelo    = self.carrega_modelo(diretorio)
 
-  @staticmethod
+    # Hiperparâmetros buscados do diretório
+    hp_dict = np.load(f'{diretorio}/params.npy', allow_pickle='TRUE').item()
+    self.hp = MZDN_HP(hp_dict["grandezas"], 
+                     [hp_dict["steps_b"], hp_dict["steps_f"]],
+                      hp_dict["error_f"],
+                      hp_dict["h_layers"],
+                      hp_dict["arq"])
+    gc.collect()
+
+
+  # Construtor 2: fornece apenas [diretorio, hiperparâmetros] -> scalers e modelo serão gerados -> uso lab!
+  def __init__(self, diretorio, hp, debug=True):
+    # Básico
+    self.diretorio = diretorio
+    self.nome      = diretorio.split("/")[-1]
+    self.debug     = debug
+    self.only_prev = False
+    # Modelo e scalers serão gerados (construtor de treinamento)
+    self.modelo    = None
+    self.scalers_x = None
+    self.scalers_y = None
+    # Hiperparâmetros
+    self.hp = hp
+
+
+  def print_if_debug(self, args):
+    if(self.debug):
+      print(args)
+
+
+  # Pré-processamento
+  def gera_pre_proc_XY(self, _dict, iteracoes_teste, treinamento_e_salva_scalers):
+    #################################################################### PRÉ PROCESSAMENTO ################################################################## 
+    df = pd.DataFrame(_dict).set_index("data")
+    X = self.__substitui_nulos_e_nan(df[self.hp.grandezas[0]])
+    Y = self.__substitui_nulos_e_nan(df[self.hp.grandezas[1]])
+    
+    if(treinamento_e_salva_scalers):  
+      self.scalers_y, self.scalers_x = StandardScaler(), StandardScaler()
+      df_X = self.scalers_x.fit_transform(X) 
+      df_Y = self.scalers_y.fit_transform(Y)
+
+      joblib.dump(self.scalers_x, f'{self.diretorio}/scalers_x.gz')
+      joblib.dump(self.scalers_y, f'{self.diretorio}/scalers_y.gz') 
+      self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
+    else:
+      df_X = self.scalers_x.transform(X) 
+      df_Y = self.scalers_y.transform(Y)   
+  
+    self.print_if_debug(pd.DataFrame(df_X).describe())
+    self.print_if_debug(pd.DataFrame(df_Y).describe())
+
+    janela_X, janela_Y = self.to_supervised(df_X, df_Y) 
+    test_ratio = iteracoes_teste/len(janela_X)
+
+    X_train, X_test = train_test_split(janela_X, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
+    Y_train, Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
+    return [df_X, df_Y], [X_train, Y_train], [X_test, Y_test]
+
+
+  # Auxiliar no pré-processamento
+  def __substitui_nulos_e_nan(self, df):
+    for grandeza in df.columns:
+      if(df[grandeza].dtypes != 'float'):
+        if(self.debug):
+          self.print_if_debug(f'{grandeza} não é float (ignorado).')
+        continue
+      else:
+        media = float(df[grandeza].mean())
+        if(self.debug):
+          self.print_if_debug(f'{grandeza} é float ==> NaNs sobrescritos pela média ({media})!')
+        df[grandeza] = df[grandeza].bfill().fillna(media)
+    return df
+  
+
+  def carrega_e_compila(self, nome): 
+    loaded_model = self.carrega_modelo(nome)
+    loaded_model = self.compila(loaded_model)
+    return loaded_model
+
+
   def carrega_modelo(nome): 
     # load json and create model
     json_file = open(f'{nome}.json', 'r')
@@ -51,58 +148,51 @@ class rnn_aux:
     loaded_model.load_weights(f"{nome}.h5")
     gc.collect()
     return loaded_model
-   
-  @staticmethod
-  def pre_proc(dados_form, treinamento_e_salva_scalers, modelo_index=0):
-    #################################################################### PRÉ PROCESSAMENTO ################################################################## 
-    df_input = pd.DataFrame(dados_form)
-    y_columns =   ["temp",             "hum",             "pres",        "rad",        
-                   "pluv"]    
-    x_columns =   ["temp",             "hum",             "pres",        "rad",   
-                   "pluv",             "dia_ano",         "horario"]     
-
-    df_input_x, df_input_y, scalers_y, scalers_x = [], [], RobustScaler(), RobustScaler()
-    el_size_y, el_size_x = len(y_columns), len(x_columns)
-
-    diretorio_nome = MODELO_SUBPASTAS[modelo_index]
-    
-    if(treinamento_e_salva_scalers):  
-      df_input_x = scalers_x.fit_transform(df_input[x_columns]) 
-      df_input_y = scalers_y.fit_transform(df_input[y_columns]) 
-
-      print("\n SALVANDO SCALERS NO DISCO!\n") 
-      joblib.dump(scalers_x, f'__arquivos_rnn/{diretorio_nome}/scalers_x.gz')
-      joblib.dump(scalers_y, f'__arquivos_rnn/{diretorio_nome}/scalers_y.gz') 
-      print("\n SCALERS SALVOS NO DISCO!\n")  
-    else:
-      scalers_x = joblib.load(f'__arquivos_rnn/{diretorio_nome}/scalers_x.gz')
-      scalers_y = joblib.load(f'__arquivos_rnn/{diretorio_nome}/scalers_y.gz')
-      print(f"1 x scaler={scalers_x}, x={df_input_x}")
-      print(f"1 y scaler={scalers_y}, y={df_input_y}")
-      df_input_x = scalers_x.transform(df_input[x_columns]) 
-      df_input_y = scalers_y.transform(df_input[y_columns]) 
-      print(f"2 x scaler={scalers_x}, x={df_input_x}")
-      print(f"2 y scaler={scalers_y}, y={df_input_y}")
- 
-    base_x, base_y = rnn_aux.to_supervised(df_input_x, df_input_y) 
-    
-    return base_x, base_y, df_input_x, df_input_y,  el_size_y, el_size_x, scalers_x, scalers_y 
-
   
-  @staticmethod
-  def to_supervised(x_input, y_input):
+
+  def compila(self, model): 
+    model.compile(loss=self.hp.error_f, optimizer='nadam', metrics=[self.hp.error_f]) 
+    return model
+  
+
+  def salva_modelo(self, model, nome): 
+    if(self.only_prev):
+      raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
+    
+    # Salva modelo
+    model_json = model.to_json()
+    with open(f"{nome}.json", "w") as json_file:
+        json_file.write(model_json) 
+    model.save_weights(f"{nome}.h5") 
+
+    # Salva hiperparâmetros
+    hp_dict = {
+      "grandezas" : self.hp.grandezas,
+      "error_f"   : self.hp.error_f,
+      "steps_f"   : self.hp.steps_f,
+      "steps_b"   : self.hp.steps_b,
+      "h_layers"  : self.hp.h_layers,
+      "arq"       : self.arq,
+    }
+    np.save(f"{self.diretorio}/params.npy", hp_dict)
+    gc.collect()
+    self.print_if_debug("Saved model to disk")
+
+
+  def to_supervised(self, x_input, y_input):
     x, y         = [], []  
-    #loop de dias => supervised com janela móvel de 24h
-    for i in range(STEPS_B, len(x_input) - STEPS_F):   
-      _x_aux, _y_aux = np.array(x_input[i - STEPS_B : i]), np.array(y_input[i : i + STEPS_F])
+    #loop de dias => supervised com janela móvel de [self.hp.steps_b] passos traseiros 
+    #                e [self.hp.steps_f] passos dianteiros
+    for i in range(self.hp.steps_b, len(x_input) - self.hp.steps_f):   
+      _x_aux, _y_aux = np.array(x_input[i - self.hp.steps_b : i]), np.array(y_input[i : i + self.hp.steps_f])
       if(len(_x_aux) > 0):
         x.append(_x_aux) 
         y.append(_y_aux)     
 
     return np.array(x), np.array(y)
 
-  @staticmethod
-  def evaluate_model(Y_true_arg, y_predicted_arg):
+
+  def evaluate_model(self, Y_true_arg, y_predicted_arg):
     scores_mae    = [] 
     scores_rmse   = []
     scores_smape  = []
@@ -111,8 +201,8 @@ class rnn_aux:
     ac_pluv       = []
     r_2           = []
     for i in range(Y_true_arg.shape[1]):
-      Y_true      =  [(float(y[i]) if y[i] is not None else float(0.001)) for y in Y_true_arg]
-      y_predicted =  [(float(y[i]) if y[i] is not None else float(0.001)) for y in y_predicted_arg]  
+      Y_true      =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in Y_true_arg]
+      y_predicted =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in y_predicted_arg]  
 
       scores_mae.append( formata_2_casas(float( mae(Y_true, y_predicted))))
       scores_rmse.append(formata_2_casas(float(rmse(Y_true, y_predicted))))
@@ -120,15 +210,14 @@ class rnn_aux:
       scores_smape.append(float(s))
       scores_ac.append(formata_2_casas(float(100-s)))   
       ac_cat.append(None)
-      ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, STEPS_B, STEPS_F) if i == 5 else None) 
-      r_2.append(formata_2_casas(100*r2_score(Y_true, y_predicted))                                                   if i != 5 else None) 
-
+      ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, self.hp.steps_b, self.hp.steps_f) if i == 5 else None) 
+      r_2.append(formata_2_casas(100*r2_score(Y_true, y_predicted)) if i != 5 else None)
       if(i==4):
-        obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, STEPS_B, STEPS_F, True)  
+        obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24,  self.hp.steps_b,  self.hp.steps_f, True)  
         scores_mae[-1]    = formata_2_casas(obj_testagem["mae"])
         scores_rmse[-1]   = formata_2_casas(obj_testagem["rmse"])
         ac_pluv[-1]       = formata_2_casas(obj_testagem["ac_cat"]) 
-        r_2[-1]           = formata_2_casas(100*obj_testagem["r2"])
+        r_2[-1]           = formata_2_casas(obj_testagem["r2"]*100)
         s                 = formata_2_casas(obj_testagem["smape"])
         scores_smape[-1]  = s
         scores_ac[-1]     = formata_2_casas(100-s) 
@@ -143,19 +232,23 @@ class rnn_aux:
       "ac_pluv" : ac_pluv[i],
       } for i in range(len(scores_mae))]
  
-  @staticmethod
-  def retorna_prev_e_erros(prev_test, Y_true, prev):
-    scores      = rnn_aux.evaluate_model(Y_true, prev_test) 
+
+  def retorna_prev_e_erros(self, prev_test, Y_true, prev, funcao_analise=None):
+    scores      = self.evaluate_model(Y_true, prev_test) 
     prev_finais = []
-    # intervalos  = []
-    prev_list   = prev[-STEPS_F:].tolist()
+    intervalos  = []
+    analises    = []
+    prev_list   = prev[-self.hp.steps_f:].tolist()
     for i in range(prev.shape[1]):
       prev_el = [(float(el[i]) if el[i] is not None else float(0.001)) for el in prev_list]
       prev_finais.append(prev_el) 
-      # intervalos.append(rnn_aux.intervalo_confianca_generico(prev_el, scores[i]["rmse"])) 
+      intervalos.append(MZDN_HF.intervalo_confianca_generico(prev_el, scores[i]["rmse"])) 
+      if(funcao_analise is not None):
+        analises.append(funcao_analise(prev_el))  
     return {
       "prev":       prev_finais,
-      # "intervalos": intervalos,
+      "intervalos": intervalos,
+      "analise":    analises,
       "score":      scores
     }
         
@@ -170,85 +263,113 @@ class rnn_aux:
     return lista_intervalo
 
 
-def treina_rnn(dados_form, modelo_index=0):     
-
-  X, Y, _, _, el_size_y, el_size_x, _, _ = rnn_aux.pre_proc(dados_form, True, modelo_index) 
-
-  # ##################################################################### LSTM MODEL
-  early_stopping_monitor = EarlyStopping(monitor='mse', patience=100, verbose=1, mode='auto')
-  checkpointer = ModelCheckpoint(filepath = f"__arquivos_rnn/{MODELO_SUBPASTAS[modelo_index]}/checkpoint", verbose=0, save_best_only=True)
-  HIDDEN_LAYERS = 500
-
-  model = keras.Sequential() 
-  # Encoder (bidirectional)
-  model.add(layers.Dropout(0.8))
-  model.add(layers.Bidirectional(
-    layers.LSTM(HIDDEN_LAYERS, input_shape=(STEPS_B, el_size_x), dropout=0.5)
-  ))
-  # Enc -> Dec
-  model.add(layers.RepeatVector(STEPS_F))    
-  # Decoder (unidirectional)
-  model.add(layers.LSTM(HIDDEN_LAYERS, return_sequences=True, dropout=0.5))
-  model.add(layers.Dropout(0.5))
-  model.add(layers.TimeDistributed(
-    layers.Dense(el_size_y, activation=layers.LeakyReLU(alpha=0.01))
-  ))   
-
-  model = rnn_aux.compila(model)  
-  history = model.fit(
-    X, 
-    Y,    
-    validation_split = 0.2,
-    batch_size = 1024,
-    epochs = 1000, 
-    shuffle = False,  
-    callbacks=[early_stopping_monitor, checkpointer], 
-    verbose=2,
-  )
+  def __lstm_encoder_decoder_bidireccional(self):
+    model = keras.Sequential() 
+    # Encoder (bidirectional)
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Bidirectional(
+      layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5)
+    ))
+    # Enc -> Dec
+    model.add(layers.RepeatVector(self.hp.steps_f))    
+    # Decoder (unidirectional)
+    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
   
-  #Salva o modelo
-  modelo_index = modelo_index if modelo_index is not None else 0
-  rnn_aux.salva_modelo(model, f"__arquivos_rnn/{MODELO_SUBPASTAS[modelo_index]}/model_final")
-  print(early_stopping_monitor.stopped_epoch)
 
-  # plot training history
-  plt.plot(history.history['mse'], label='train (MSE)')
-  plt.plot(history.history['val_mse'], label='test (MSE)')
-  plt.legend()
-  plt.show()
-
-   
-def previsao_rnn(dados_form, iteracoes_teste= 24, modelo_index=0):     
-
-  X, Y, df_input_x, df_input_y, el_size_y, el_size_x, scalers_x, scalers_y = rnn_aux.pre_proc(dados_form, False, modelo_index) 
-
-  iteracoes_teste
-  test_ratio = iteracoes_teste/len(X) 
-  print(f"\nTEST RATIO ==>{iteracoes_teste} / {len(X)} = {test_ratio}\n")
-  _, X_test = train_test_split(X, test_size=test_ratio, shuffle=False, random_state=142) 
-  _, Y_test = train_test_split(Y, test_size=test_ratio, shuffle=False, random_state=142) 
+  def __lstm_encoder_decoder(self):
+    model = keras.Sequential() 
+    # Encoder (bidirectional)
+    model.add(layers.Dropout(0.5))
+    model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5))
+    # Enc -> Dec
+    model.add(layers.RepeatVector(self.hp.steps_f))    
+    # Decoder (unidirectional)
+    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
   
-  diretorio = MODELO_SUBPASTAS[modelo_index]
-  modelo = rnn_aux.carrega_e_compila(f'__arquivos_rnn/{diretorio}/model_final')
-  print(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {modelo.summary()}\n X_test shape = {X_test.shape}")
-  score = modelo.evaluate(X_test, Y_test, verbose=0)
-  print(f"{modelo.metrics_names[1]}: {score[1]}" )
 
-  #--------------- prepara prev ---------------
-  base_prev_x = np.array([df_input_x[-STEPS_B:,:]])
-  # print(f"ÚLTIMOS 24 X USADOS (SCALED): \n {np.array([el for el in base_prev_x[:,:,:el_size_x]])}\n")
-  # print(f"ÚLTIMOS 24 X USADOS (BRUTOS): \n {np.array([scalers_X.inverse_transform(el) for el in base_prev_x[:,:,:el_size_x]])}\n")  
-  base_prev_y = np.array([df_input_y[-STEPS_B:,:]])
-  print(f"ÚLTIMOS 24 Y USADOS (SCALED): \n {np.array([el for el in base_prev_y[:,:,:el_size_y]])}\n")
-  print(f"ÚLTIMOS 24 Y USADOS (BRUTOS): \n {np.array([scalers_y.inverse_transform(el) for el in base_prev_y[:,:,:el_size_y]])}\n")  
+  def __lstm_normal(self):
+    model = keras.Sequential()
+    model.add(layers.Dropout(0.5))
+    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
 
-  df_pred       = modelo.predict(base_prev_x[-1:])
-  prev          = np.array([scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1,el_size_y)
+  def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):     
+    if(self.only_prev):
+      raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
+    
+    XY, XY_train, XY_test = self.gera_pre_proc_XY(dados_form, iteracoes_teste, True) 
+    # ##################################################################### LSTM MODEL
+    early_stopping_monitor = EarlyStopping(monitor=self.hp.error_f, patience=100, verbose=1, mode='auto')
+    checkpointer = ModelCheckpoint(filepath = f"{self.diretorio}/checkpoint", verbose=0, save_best_only=True)
+
+    if(self.hp.arq == ARQ_NORMAL):
+      model = self.__lstm_normal()
+    elif(self.hp.arq == ARQ_ENC_DEC):
+      model = self.__lstm_encoder_decoder()
+    elif(self.hp.arq == ARQ_ENC_DEC_BID):
+      model = self.__lstm_encoder_decoder_bidireccional()
+    else:
+      raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_NORMAL}\", \"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\"] -> recebido: \"{self.hp.arq}\"")
+
+    model = self.compila(model)
+    history = model.fit(
+      XY_train[0],            # X
+      XY_train[1],            # Y
+      validation_split = 0.2,
+      batch_size = 2049,
+      epochs = 1000, 
+      shuffle = False,  
+      callbacks=[early_stopping_monitor, checkpointer], 
+      verbose=2,
+    )
+
+    #Salva o modelo
+    self.salva_modelo(model, self.diretorio)
+    self.print_if_debug(early_stopping_monitor.stopped_epoch)
+
+    # plot training history and save it
+    plt.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train {self.hp.error_f}')
+    plt.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: test {self.hp.error_f}')
+    plt.legend()
+    plt.savefig(f"{self.diretorio}/metricas.pdf", bbox_inches='tight')
+
+  def prever(self, dados_form, iteracoes_teste=I_TESTE_PADRAO, inclui_compostas=None, compostas_args=None):     
+    
+    df_XY, _, test_XY = self.gera_pre_proc_XY(dados_form, iteracoes_teste) 
+    
+    self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {test_XY[0].shape}")
+
+    #--------------- prepara prev ---------------
+    base_prev_x = np.array([df_XY[0][-self.hp.steps_b:,:]])
+
+    score = self.modelo.evaluate(test_XY[0], test_XY[1], verbose= 0 if self.debug else 1)
+
+    #------------------- debug ------------------
+    self.print_if_debug(f"{self.modelo.metrics_names[1]}: {score[1]}" )
+    self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[el for el in base_prev_x[:, :, :self.hp.width_x]]}\n")
+    self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
+
+    df_pred       = self.modelo.predict(base_prev_x[-1:])
+    prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
+    
+    #--------------- prepara teste --------------- 
+    df_pred_test  = self.modelo.predict(test_XY[0]) 
+    prev_test     = np.array([self.scalers_y.inverse_transform(el) for el in df_pred_test]).reshape(-1, self.hp.width_y)
+    Y_true_test   = np.array(self.scalers_y.inverse_transform(test_XY[1].reshape(-1, self.hp.width_y)))
   
-  #--------------- prepara teste --------------- 
-  df_pred_test  = modelo.predict(X_test) 
-  prev_test     = np.array([scalers_y.inverse_transform(el) for el in df_pred_test]).reshape(-1,el_size_y)
-  Y_true_test   = np.array(scalers_y.inverse_transform(Y_test.reshape(-1,el_size_y))) 
- 
-  return rnn_aux.retorna_prev_e_erros(prev_test, Y_true_test, prev, STEPS_B, STEPS_F)
-   
+    #--------------- pos proc ---------------
+    if(inclui_compostas is not None):
+      prev          = inclui_compostas(prev,        compostas_args)
+      prev_test     = inclui_compostas(prev_test,   compostas_args)
+      Y_true_test   = inclui_compostas(Y_true_test, compostas_args) 
+    
+    return self.retorna_prev_e_erros(prev_test, Y_true_test, prev)
+    
