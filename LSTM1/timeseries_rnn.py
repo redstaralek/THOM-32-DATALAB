@@ -13,20 +13,23 @@ from matplotlib import pyplot as plt
 
 
 # ======================== AUXILIARES =========================
-EPSLON = 0.0000001
-RND_ST = 142
-I_TESTE_PADRAO = 24
-ARQ_NORMAL = "normal"
-ARQ_ENC_DEC ="encoder_decoder"
+EPSLON          = 0.0000001
+RND_ST          = 142
+I_TESTE_PADRAO  = 24
+ARQ_NORMAL      = "normal"
+ARQ_ENC_DEC     = "encoder_decoder"
 ARQ_ENC_DEC_BID = "encoder_decoder_bidirecional"
-
+BATCH_SIZE      = 2048
+EPOCHS          = 1000
+PATIENCE        = 100
+STEPS = [24, 24]
 
 # =================== CLASSE DE HIPERPARÂMETROS ===================
 class MZDN_HP:
-  def __init__(self, grandezas, steps, error_f, h_layers=None, arq=None):
-    self.grandezas              = grandezas # [0] conterá X e [1] conterá Y
+  def __init__(self, grandezas, error_f, h_layers=None, arq=None):
+    self.grandezas              = grandezas # [0] contém X e [1] contém Y
     self.width_x, self.width_y  = len(self.grandezas[0]), len(self.grandezas[1])
-    self.steps_b, self.steps_f  = steps     # [0] conterá Back e [1] conterá Forward
+    self.steps_b, self.steps_f  = STEPS     # [0] conterá Back e [1] conterá Forward
     self.error_f                = error_f
     self.h_layers               = h_layers
     self.arq                    = arq
@@ -42,6 +45,7 @@ class MZDN_HF:
     self.diretorio = diretorio
     self.debug     = debug
     self.only_prev = True
+    self.stats = []
 
     # Se infomou scalers usa. Senão -> busca no disco pelo dir
     if(scalers is not None):
@@ -66,7 +70,6 @@ class MZDN_HF:
                       hp_dict["arq"])
     gc.collect()
 
-
   # Construtor 2: fornece apenas [diretorio, hiperparâmetros] -> scalers e modelo serão gerados -> uso lab!
   def __init__(self, diretorio, hp, debug=True):
     # Básico
@@ -74,6 +77,7 @@ class MZDN_HF:
     self.nome      = diretorio.split("/")[-1]
     self.debug     = debug
     self.only_prev = False
+    self.stats = []
     # Modelo e scalers serão gerados (construtor de treinamento)
     self.modelo    = None
     self.scalers_x = None
@@ -81,11 +85,9 @@ class MZDN_HF:
     # Hiperparâmetros
     self.hp = hp
 
-
   def print_if_debug(self, args):
     if(self.debug):
       print(args)
-
 
   # Pré-processamento
   def gera_pre_proc_XY(self, _dict, iteracoes_teste, treinamento_e_salva_scalers):
@@ -116,7 +118,6 @@ class MZDN_HF:
     Y_train, Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
     return [df_X, df_Y], [X_train, Y_train], [X_test, Y_test]
 
-
   # Auxiliar no pré-processamento
   def __substitui_nulos_e_nan(self, df):
     for grandeza in df.columns:
@@ -131,12 +132,10 @@ class MZDN_HF:
         df[grandeza] = df[grandeza].bfill().fillna(media)
     return df
   
-
   def carrega_e_compila(self, nome): 
     loaded_model = self.carrega_modelo(nome)
     loaded_model = self.compila(loaded_model)
     return loaded_model
-
 
   def carrega_modelo(nome): 
     # load json and create model
@@ -149,12 +148,10 @@ class MZDN_HF:
     gc.collect()
     return loaded_model
   
-
   def compila(self, model): 
     model.compile(loss=self.hp.error_f, optimizer='nadam', metrics=[self.hp.error_f]) 
     return model
   
-
   def salva_modelo(self, model, nome): 
     if(self.only_prev):
       raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
@@ -172,12 +169,11 @@ class MZDN_HF:
       "steps_f"   : self.hp.steps_f,
       "steps_b"   : self.hp.steps_b,
       "h_layers"  : self.hp.h_layers,
-      "arq"       : self.arq,
+      "arq"       : self.hp.arq,
     }
     np.save(f"{self.diretorio}/params.npy", hp_dict)
     gc.collect()
     self.print_if_debug("Saved model to disk")
-
 
   def to_supervised(self, x_input, y_input):
     x, y         = [], []  
@@ -190,7 +186,6 @@ class MZDN_HF:
         y.append(_y_aux)     
 
     return np.array(x), np.array(y)
-
 
   def evaluate_model(self, Y_true_arg, y_predicted_arg):
     scores_mae    = [] 
@@ -232,7 +227,6 @@ class MZDN_HF:
       "ac_pluv" : ac_pluv[i],
       } for i in range(len(scores_mae))]
  
-
   def retorna_prev_e_erros(self, prev_test, Y_true, prev, funcao_analise=None):
     scores      = self.evaluate_model(Y_true, prev_test) 
     prev_finais = []
@@ -262,7 +256,6 @@ class MZDN_HF:
        
     return lista_intervalo
 
-
   def __lstm_encoder_decoder_bidireccional(self):
     model = keras.Sequential() 
     # Encoder (bidirectional)
@@ -278,7 +271,6 @@ class MZDN_HF:
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
     return model 
   
-
   def __lstm_encoder_decoder(self):
     model = keras.Sequential() 
     # Encoder (bidirectional)
@@ -292,7 +284,6 @@ class MZDN_HF:
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
     return model 
   
-
   def __lstm_normal(self):
     model = keras.Sequential()
     model.add(layers.Dropout(0.5))
@@ -301,13 +292,54 @@ class MZDN_HF:
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
     return model 
 
+  def __calcula_stats_e_salva(self, model, history, XY_train, XY_test, early_stopping_monitor):
+    _, train_error_f_stat = model.evaluate(XY_train[0], XY_train[1], verbose=0)
+    _, test_error_f_stat  = model.evaluate(XY_test[0], XY_test[1], verbose=0)
+    val_error_f_stat = history.history[f'val_{self.hp.error_f}'][-1]
+    stat_dict = {
+      "nome": self.nome,
+      "error_f": self.hp.error_f,
+      "treino": train_error_f_stat,
+      "validacao": val_error_f_stat,
+      "teste": test_error_f_stat,
+      "epoch_parada": early_stopping_monitor.stopped_epoch
+    }
+    self.stats.append(stat_dict)
+    self.print_if_debug(stat_dict)
+
+    # Salva estatísticas locais (última rede) e cumulativas (todas as redes da bateria)
+    # Locais
+    with open(f'{self.diretorio}/stats.csv', 'w') as f:
+      w = csv.DictWriter(f, stat_dict.keys())
+      w.writeheader()
+      w.writerow(stat_dict)
+    # Cumulativos
+    with open(f'{self.diretorio}/stats.csv', 'w') as f:
+      w = csv.DictWriter(f, stat_dict.keys())
+      w.writeheader()
+      for stat in self.stats:
+        w.writerow(stat)
+    # Salva gráficos de stats locais e cumulativos
+    # Locais
+    fg, ax = plt.subplots( nrows=1, ncols=1 ) 
+    ax.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train. {self.hp.error_f} ->')
+    ax.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid. {self.hp.error_f} ->')
+    ax.legend()
+    fg.savefig(f"{self.diretorio}/metricas.pdf", bbox_inches='tight')
+    fg.savefig(f"{self.diretorio}/metricas.png", bbox_inches='tight')
+    # Cumulativos
+    plt.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train. {self.hp.error_f}')
+    plt.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid. {self.hp.error_f}')
+    plt.legend()
+    plt.savefig(f"{self.diretorio}/metricas_cumulativas.pdf", bbox_inches='tight')
+
   def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):     
     if(self.only_prev):
       raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
     
     XY, XY_train, XY_test = self.gera_pre_proc_XY(dados_form, iteracoes_teste, True) 
     # ##################################################################### LSTM MODEL
-    early_stopping_monitor = EarlyStopping(monitor=self.hp.error_f, patience=100, verbose=1, mode='auto')
+    early_stopping_monitor = EarlyStopping(monitor=self.hp.error_f, patience=PATIENCE, verbose=1, mode='auto')
     checkpointer = ModelCheckpoint(filepath = f"{self.diretorio}/checkpoint", verbose=0, save_best_only=True)
 
     if(self.hp.arq == ARQ_NORMAL):
@@ -324,23 +356,19 @@ class MZDN_HF:
       XY_train[0],            # X
       XY_train[1],            # Y
       validation_split = 0.2,
-      batch_size = 2049,
-      epochs = 1000, 
+      batch_size = BATCH_SIZE,
+      epochs = EPOCHS, 
       shuffle = False,  
       callbacks=[early_stopping_monitor, checkpointer], 
       verbose=2,
     )
-
-    #Salva o modelo
+  
+    # Salva o modelo
     self.salva_modelo(model, self.diretorio)
-    self.print_if_debug(early_stopping_monitor.stopped_epoch)
-
-    # plot training history and save it
-    plt.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train {self.hp.error_f}')
-    plt.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: test {self.hp.error_f}')
-    plt.legend()
-    plt.savefig(f"{self.diretorio}/metricas.pdf", bbox_inches='tight')
-
+    
+    # Gera relatórios estatísticos do treinamento
+    self.__calcula_stats_e_salva(model, history, XY_train, XY_train, early_stopping_monitor)
+    
   def prever(self, dados_form, iteracoes_teste=I_TESTE_PADRAO, inclui_compostas=None, compostas_args=None):     
     
     df_XY, _, test_XY = self.gera_pre_proc_XY(dados_form, iteracoes_teste) 
