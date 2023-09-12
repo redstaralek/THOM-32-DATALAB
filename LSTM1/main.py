@@ -81,7 +81,7 @@ def main(args):
     # saída com uma rede com função de erro MSE/MAE. Precisa-se de uma rede dedicada para esta grandeza.
     
     # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
-    arquiteturas = [ARQ_NORMAL, ARQ_ENC_DEC, ARQ_ENC_DEC_BID]
+    arquiteturas = [ARQ_NORMAL, ARQ_NORMAL_BID, ARQ_ENC_DEC, ARQ_ENC_DEC_BID]
     hps = [
         # Varia hidden_layers com MSE
         MZDN_HP(grandezas, "mse", 100),

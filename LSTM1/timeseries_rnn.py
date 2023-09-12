@@ -17,10 +17,11 @@ EPSLON          = 0.0000001
 RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_NORMAL      = "normal"
+ARQ_NORMAL_BID  = "bidirecctional"
 ARQ_ENC_DEC     = "encoder_decoder"
-ARQ_ENC_DEC_BID = "encoder_decoder_bidirecional"
+ARQ_ENC_DEC_BID = "encoder_decoder_bidirecctional"
 BATCH_SIZE      = 2048
-EPOCHS          = 1000
+EPOCHS          = 1500
 PATIENCE        = 100
 STEPS = [24, 24]
 
@@ -33,6 +34,22 @@ class MZDN_HP:
     self.error_f                = error_f
     self.h_layers               = h_layers
     self.arq                    = arq
+
+  def salvar(self):
+    hp_dict = {
+      "grandezas" : self.hp.grandezas,
+      "error_f"   : self.hp.error_f,
+      "steps_f"   : self.hp.steps_f,
+      "steps_b"   : self.hp.steps_b,
+      "h_layers"  : self.hp.h_layers,
+      "arq"       : self.hp.arq,
+    }
+    with open(f'{self.diretorio}/params.csv', 'w') as f:
+      w = csv.DictWriter(f, hp_dict.keys())
+      w.writeheader()
+      w.writerow(hp_dict)
+    np.save(f"{self.diretorio}/params.npy", hp_dict)
+    gc.collect()
 
 
 # ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
@@ -132,19 +149,19 @@ class MZDN_HF:
         df[grandeza] = df[grandeza].bfill().fillna(media)
     return df
   
-  def carrega_e_compila(self, nome): 
-    loaded_model = self.carrega_modelo(nome)
+  def carrega_e_compila(self, diretorio): 
+    loaded_model = self.carrega_modelo(diretorio)
     loaded_model = self.compila(loaded_model)
     return loaded_model
 
-  def carrega_modelo(nome): 
+  def carrega_modelo(diretorio): 
     # load json and create model
-    json_file = open(f'{nome}.json', 'r')
+    json_file = open(f'{diretorio}/modelo.json', 'r')
     loaded_model_json = json_file.read()
     json_file.close() 
     loaded_model = model_from_json(loaded_model_json)
     # load weights into new model
-    loaded_model.load_weights(f"{nome}.h5")
+    loaded_model.load_weights(f"{diretorio}/modelo.h5")
     gc.collect()
     return loaded_model
   
@@ -152,28 +169,18 @@ class MZDN_HF:
     model.compile(loss=self.hp.error_f, optimizer='nadam', metrics=[self.hp.error_f]) 
     return model
   
-  def salva_modelo(self, model, nome): 
+  def salva_modelo(self, model, diretorio): 
     if(self.only_prev):
       raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
     
     # Salva modelo
     model_json = model.to_json()
-    with open(f"{nome}.json", "w") as json_file:
+    with open(f"{diretorio}/modelo.json", "w") as json_file:
         json_file.write(model_json) 
-    model.save_weights(f"{nome}.h5") 
-
-    # Salva hiperparâmetros
-    hp_dict = {
-      "grandezas" : self.hp.grandezas,
-      "error_f"   : self.hp.error_f,
-      "steps_f"   : self.hp.steps_f,
-      "steps_b"   : self.hp.steps_b,
-      "h_layers"  : self.hp.h_layers,
-      "arq"       : self.hp.arq,
-    }
-    np.save(f"{self.diretorio}/params.npy", hp_dict)
+    model.save_weights(f"{diretorio}/modelo.h5") 
+    self.hp.salvar()
+    self.print_if_debug("Saved model and HP into to disk!")
     gc.collect()
-    self.print_if_debug("Saved model to disk")
 
   def to_supervised(self, x_input, y_input):
     x, y         = [], []  
@@ -292,46 +299,46 @@ class MZDN_HF:
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
     return model 
 
+  def __lstm_normal_bidireccional(self):
+    model = keras.Sequential()
+    model.add(layers.Dropout(0.5))
+    model.add(layers.LSTM(layers.Bidirectional(self.hp.h_layers, return_sequences=True, dropout=0.5)))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
+
   def __calcula_stats_e_salva(self, model, history, XY_train, XY_test, early_stopping_monitor):
-    _, train_error_f_stat = model.evaluate(XY_train[0], XY_train[1], verbose=0)
+    # _, train_error_f_stat = model.evaluate(XY_train[0], XY_train[1], verbose=0)
     _, test_error_f_stat  = model.evaluate(XY_test[0], XY_test[1], verbose=0)
     val_error_f_stat = history.history[f'val_{self.hp.error_f}'][-1]
+    train_error_f_stat = history.history[self.hp.error_f][-1]
     stat_dict = {
       "nome": self.nome,
       "error_f": self.hp.error_f,
       "treino": train_error_f_stat,
       "validacao": val_error_f_stat,
       "teste": test_error_f_stat,
-      "epoch_parada": early_stopping_monitor.stopped_epoch
+      "epoch_parada": early_stopping_monitor.stopped_epoch,
+      "history_val_error_f": history.history[f'val_{self.hp.error_f}'],
+      "history_error_f": history.history[self.hp.error_f],
     }
     self.stats.append(stat_dict)
     self.print_if_debug(stat_dict)
 
-    # Salva estatísticas locais (última rede) e cumulativas (todas as redes da bateria)
+    # Salva estatísticas
     # Locais
     with open(f'{self.diretorio}/stats.csv', 'w') as f:
       w = csv.DictWriter(f, stat_dict.keys())
       w.writeheader()
       w.writerow(stat_dict)
-    # Cumulativos
-    with open(f'{self.diretorio}/stats.csv', 'w') as f:
-      w = csv.DictWriter(f, stat_dict.keys())
-      w.writeheader()
-      for stat in self.stats:
-        w.writerow(stat)
     # Salva gráficos de stats locais e cumulativos
     # Locais
     fg, ax = plt.subplots( nrows=1, ncols=1 ) 
-    ax.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train. {self.hp.error_f} ->')
-    ax.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid. {self.hp.error_f} ->')
+    ax.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train {self.hp.error_f}={"{:.4f}".format(train_error_f_stat)}')
+    ax.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid {self.hp.error_f}={"{:.4f}".format(val_error_f_stat)}')
     ax.legend()
     fg.savefig(f"{self.diretorio}/metricas.pdf", bbox_inches='tight')
     fg.savefig(f"{self.diretorio}/metricas.png", bbox_inches='tight')
-    # Cumulativos
-    plt.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train. {self.hp.error_f}')
-    plt.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid. {self.hp.error_f}')
-    plt.legend()
-    plt.savefig(f"{self.diretorio}/metricas_cumulativas.pdf", bbox_inches='tight')
 
   def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):     
     if(self.only_prev):
@@ -346,6 +353,8 @@ class MZDN_HF:
       model = self.__lstm_normal()
     elif(self.hp.arq == ARQ_ENC_DEC):
       model = self.__lstm_encoder_decoder()
+    elif(self.hp.arq == ARQ_NORMAL_BID):
+      model = self.__lstm_normal_bidireccional()
     elif(self.hp.arq == ARQ_ENC_DEC_BID):
       model = self.__lstm_encoder_decoder_bidireccional()
     else:
