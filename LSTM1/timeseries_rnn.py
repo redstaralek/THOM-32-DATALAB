@@ -58,15 +58,11 @@ class MZDN_HP:
 #region ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
 class MZDN_HF:
   
-  #region CONSTRUTORES
-  # Construtor 1: fornece apenas [diretorio] OU [modelo, scalers, diretorio] -> uso web!
-  # Instância restrita p/ previsão.
-  def __init__(self, diretorio, modelo=None, scalers=None, debug=True): 
+  def __init__(self, diretorio, hp=None, debug=True):
     
     self.diretorio = diretorio
     self.nome      = diretorio.split("__modelos")[-1]
     self.debug     = debug
-    self.only_prev = True
     self.stats     = []
     self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
     self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
@@ -76,54 +72,30 @@ class MZDN_HF:
     self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
     self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
 
-    # Se infomou scalers usa. Senão -> busca no disco pelo [dir + complemento scalers]
-    if(scalers is not None):
-      self.scalers_x = scalers[0]
-      self.scalers_y = scalers[1]
+    if(hp is not None):
+      # Se forneceu hp, é uma instância de treinamento (uso lab, apenas)
+      self.only_prev = False
+      # Hiperparâmetros
+      self.hp        = hp
+      # Modelo e scalers serão gerados
+      self.scalers_x = None
+      self.scalers_y = None
+      self.modelo    = None
     else:
+      # Se não forneceu hp, é uma instância de previsão (uso web -> produção)
+      self.only_prev = True
+      # Hiperparâmetros buscados do diretório
+      hp_dict = np.load(self.hp_dict_path, allow_pickle='TRUE').item()
+      self.hp = MZDN_HP(hp_dict["grandezas"], 
+                      [hp_dict["steps_b"], hp_dict["steps_f"]],
+                        hp_dict["error_f"],
+                        hp_dict["h_layers"],
+                        hp_dict["arq"])
+      # Recupera scalers e model do diretorio 
       self.scalers_x = joblib.load(self.scalers_x_path)
       self.scalers_y = joblib.load(self.scalers_y_path)
-
-    # Hiperparâmetros buscados do diretório
-    hp_dict = np.load(self.hp_dict_path, allow_pickle='TRUE').item()
-    self.hp = MZDN_HP(hp_dict["grandezas"], 
-                     [hp_dict["steps_b"], hp_dict["steps_f"]],
-                      hp_dict["error_f"],
-                      hp_dict["h_layers"],
-                      hp_dict["arq"])
-    
-    # Se infomou modelo usa. Senão -> constroi pelos [HPs] e busca no disco pelo [dir + compelemento model]
-    if(modelo is not None):
-      self.modelo    = modelo
-    else:
       self.modelo    = self.__get_arquitetura_compilada()
       self.modelo    = tf.keras.models.load_model(self.checkpointed_model_path)
-
-    gc.collect()
-
-  # Construtor 2: fornece apenas [diretorio, hiperparâmetros] -> scalers e modelo serão gerados -> uso lab!
-  # Instância de treinamento, telatório e previsão
-  def __init__(self, diretorio, hp, debug=True):
-    # Básico
-    self.diretorio = diretorio
-    self.nome      = diretorio.split("__modelos")[-1]
-    self.debug     = debug
-    self.only_prev = False
-    self.stats     = []
-    self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
-    self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
-    self.scalers_y_path          = f'{diretorio}/scalers/scalers_y.gz'
-    self.hp_dict_path            = f'{diretorio}/modelo/params.npy'
-    self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
-    self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
-    self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
-    # Modelo e scalers serão gerados (construtor de treinamento)
-    self.modelo    = None
-    self.scalers_x = None
-    self.scalers_y = None
-    # Hiperparâmetros
-    self.hp        = hp
-  #endregion
 
   #region AUXILIARES
   def print_if_debug(self, args):
