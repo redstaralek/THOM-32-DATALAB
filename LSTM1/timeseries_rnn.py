@@ -5,11 +5,10 @@ from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
+from sklearn.metrics                 import  mean_absolute_error as mae  
 from sklearn.preprocessing           import RobustScaler, StandardScaler
 from sklearn.model_selection         import train_test_split
-import os, gc, joblib, pandas as pd, numpy as np
-from .utils import *
-from .inicializacao import *
+import os, gc, joblib, csv, pandas as pd, numpy as np
 from matplotlib import pyplot as plt
 #endregion
 
@@ -23,6 +22,16 @@ ARQ_ENC_DEC_BID = "encoder_decoder_bidirectional"
 BATCH_SIZE      = 2048
 EPOCHS          = 200
 PATIENCE        = 25
+
+def __formata_2_casas(num): 
+  return float('{0:.2f}'.format(num)) if num is not None else None
+
+def __smape(A, F):
+  A       = np.array(A)
+  F       = np.array(F)
+  epsilon = 0.1
+  resp    = 100/len(A) * np.sum(2 * np.abs(F - A) / (np.abs(A) + np.abs(F) + epsilon))
+  return resp if resp == resp else 0 #se não NaN
 #endregion
 
 
@@ -77,6 +86,7 @@ class MZDN_HF:
       self.only_prev = False
       # Hiperparâmetros
       self.hp        = hp
+      self.hp.salvar(self.diretorio)
       # Modelo e scalers serão gerados
       self.scalers_x = None
       self.scalers_y = None
@@ -246,7 +256,7 @@ class MZDN_HF:
   def evaluate_model(self, Y_true_arg, y_predicted_arg):
     scores_mae    = [] 
     scores_rmse   = []
-    scores_smape  = []
+    scores___smape  = []
     scores_ac     = [] 
     ac_cat        = [] 
     ac_pluv       = []
@@ -255,28 +265,28 @@ class MZDN_HF:
       Y_true      =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in Y_true_arg]
       y_predicted =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in y_predicted_arg]  
 
-      scores_mae.append( formata_2_casas(float( mae(Y_true, y_predicted))))
-      scores_rmse.append(formata_2_casas(float(rmse(Y_true, y_predicted))))
-      s = formata_2_casas(float(smape(Y_true, y_predicted)))
-      scores_smape.append(float(s))
-      scores_ac.append(formata_2_casas(float(100-s)))   
+      scores_mae.append( __formata_2_casas(float( mae(Y_true, y_predicted))))
+      scores_rmse.append(__formata_2_casas(float(rmse(Y_true, y_predicted))))
+      s = __formata_2_casas(float(__smape(Y_true, y_predicted)))
+      scores___smape.append(float(s))
+      scores_ac.append(__formata_2_casas(float(100-s)))   
       ac_cat.append(None)
       ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, self.hp.steps_b, self.hp.steps_f) if i == 5 else None) 
-      r_2.append(formata_2_casas(100*r2_score(Y_true, y_predicted)) if i != 5 else None)
+      r_2.append(__formata_2_casas(100*r2_score(Y_true, y_predicted)) if i != 5 else None)
       if(i==4):
         obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24,  self.hp.steps_b,  self.hp.steps_f, True)  
-        scores_mae[-1]    = formata_2_casas(obj_testagem["mae"])
-        scores_rmse[-1]   = formata_2_casas(obj_testagem["rmse"])
-        ac_pluv[-1]       = formata_2_casas(obj_testagem["ac_cat"]) 
-        r_2[-1]           = formata_2_casas(obj_testagem["r2"]*100)
-        s                 = formata_2_casas(obj_testagem["smape"])
-        scores_smape[-1]  = s
-        scores_ac[-1]     = formata_2_casas(100-s) 
+        scores_mae[-1]    = __formata_2_casas(obj_testagem["mae"])
+        scores_rmse[-1]   = __formata_2_casas(obj_testagem["rmse"])
+        ac_pluv[-1]       = __formata_2_casas(obj_testagem["ac_cat"]) 
+        r_2[-1]           = __formata_2_casas(obj_testagem["r2"]*100)
+        s                 = __formata_2_casas(obj_testagem["__smape"])
+        scores___smape[-1]  = s
+        scores_ac[-1]     = __formata_2_casas(100-s) 
     return [{
       "i"       : i,
       "mae"     : scores_mae[i],
       "rmse"    : scores_rmse[i],
-      "smape"   : scores_smape[i],
+      "__smape"   : scores___smape[i],
       "ac"      : scores_ac[i],
       "ac_cat"  : ac_cat[i],
       "r_2"     : r_2[i],
@@ -339,35 +349,6 @@ class MZDN_HF:
   #endregion
 
   #region PREVISÕES
-  def retorna_prev_e_erros(self, prev_test, Y_true, prev, funcao_analise=None):
-    scores      = self.evaluate_model(Y_true, prev_test) 
-    prev_finais = []
-    intervalos  = []
-    analises    = []
-    prev_list   = prev[-self.hp.steps_f:].tolist()
-    for i in range(prev.shape[1]):
-      prev_el = [(float(el[i]) if el[i] is not None else float(0.001)) for el in prev_list]
-      prev_finais.append(prev_el) 
-      intervalos.append(MZDN_HF.intervalo_confianca_generico(prev_el, scores[i]["rmse"])) 
-      if(funcao_analise is not None):
-        analises.append(funcao_analise(prev_el))  
-    return {
-      "prev":       prev_finais,
-      "intervalos": intervalos,
-      "analise":    analises,
-      "score":      scores
-    }
-        
-  @staticmethod
-  def intervalo_confianca_generico(prev, erro): 
-    lista_intervalo = []
-    propagacao_exp  = 1
-    for i in range(len(prev)):
-      erro*=propagacao_exp
-      lista_intervalo.append({"ci_up": float(prev[i] + erro), "ci_down": float(prev[i]  - erro)})
-       
-    return lista_intervalo
-
   def prever(self, dados_form, iteracoes_teste=I_TESTE_PADRAO, inclui_compostas=None, compostas_args=None):     
     df_XY, _, test_XY = self.gera_pre_proc_XY(dados_form, iteracoes_teste) 
     self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {test_XY[0].shape}")
@@ -399,7 +380,7 @@ class MZDN_HF:
       prev_test     = inclui_compostas(prev_test,   compostas_args)
       Y_true_test   = inclui_compostas(Y_true_test, compostas_args) 
     
-    return self.retorna_prev_e_erros(prev_test, Y_true_test, prev)
+    return self.prev
   #endregion 
 
 #endregion    
