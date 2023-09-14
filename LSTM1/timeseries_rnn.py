@@ -8,8 +8,8 @@ from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
 from sklearn.preprocessing           import RobustScaler, StandardScaler
 from sklearn.model_selection         import train_test_split
 import os, gc, joblib, pandas as pd, numpy as np
-from utils import *
-from inicializacao import *
+from .utils import *
+from .inicializacao import *
 from matplotlib import pyplot as plt
 #endregion
 
