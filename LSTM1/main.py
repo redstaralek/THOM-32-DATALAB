@@ -10,6 +10,7 @@ def parse_args():
     parser.add_argument('--linha',                      default=0)
     parser.add_argument('--linha_max',                  default=None)
     parser.add_argument('--arquivo',                    default='clima_bsb.csv')
+    # 1 ano (dados horários) => Último [2014, 2020] na base clima_bsb => [2020] p/ teste
     parser.add_argument('--iteracoes_teste',            default=365*24)
     return parser
 
@@ -81,24 +82,30 @@ def main(args):
     # saída com uma rede com função de erro MSE/MAE. Precisa-se de uma rede dedicada para esta grandeza.
     
     # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
-    arquiteturas = [ARQ_NORMAL, ARQ_NORMAL_BID, ARQ_ENC_DEC, ARQ_ENC_DEC_BID]
+    arquiteturas = [
+        ARQ_ENC_DEC, 
+        ARQ_ENC_DEC_BID
+    ]
     hps = [
-        # Varia hidden_layers com MSE
-        MZDN_HP(grandezas, "mse", 100),
-        MZDN_HP(grandezas, "mse", 200),
-        MZDN_HP(grandezas, "mse", 400),
-        # Varia hidden_layers com MAE
-        MZDN_HP(grandezas, "mae", 100),
-        MZDN_HP(grandezas, "mae", 200),
-        MZDN_HP(grandezas, "mae", 400),
+        MZDN_HP(grandezas, "mse", 100, 24),
+        MZDN_HP(grandezas, "mse", 100, 48),
+        MZDN_HP(grandezas, "mse", 100, 72),
+
+        MZDN_HP(grandezas, "mse", 200, 24),
+        MZDN_HP(grandezas, "mse", 200, 48),
+        MZDN_HP(grandezas, "mse", 200, 72),
+
+        MZDN_HP(grandezas, "mse", 400, 24),
+        MZDN_HP(grandezas, "mse", 400, 48),
+        MZDN_HP(grandezas, "mse", 400, 72),
     ]
 
-    diretorios = [f"__modelos/modelo_{i+1}" for i in range(len(hps))]
     if(treina):
         for arq in arquiteturas:
-            for i, diretorio in enumerate(diretorios):
+            for i in range(len(hps)):
                 hp = hps[i]
                 hp.arq = arq
+                diretorio = f"__modelos/{arq}/{hp.error_f}__{hp.h_layers}HL__{hp.steps_b}B"
                 mzdn = MZDN_HF(diretorio, hp, True)
                 print(mzdn.treinar(X, iteracoes_teste))
     else:

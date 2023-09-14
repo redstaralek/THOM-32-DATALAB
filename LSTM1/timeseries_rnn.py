@@ -1,6 +1,7 @@
+#region IMPORTS
 from statsmodels.tools.eval_measures import rmse
 from sklearn.metrics                 import r2_score, mean_absolute_error as mae 
-from tensorflow.keras.models         import model_from_json,  model_from_json
+from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
@@ -10,103 +11,127 @@ import os, gc, joblib, pandas as pd, numpy as np
 from utils import *
 from inicializacao import *
 from matplotlib import pyplot as plt
+#endregion
 
 
-# ======================== AUXILIARES =========================
+#region ======================= AUXILIARES ==========================
 EPSLON          = 0.0000001
 RND_ST          = 142
 I_TESTE_PADRAO  = 24
-ARQ_NORMAL      = "normal"
-ARQ_NORMAL_BID  = "bidirecctional"
 ARQ_ENC_DEC     = "encoder_decoder"
-ARQ_ENC_DEC_BID = "encoder_decoder_bidirecctional"
+ARQ_ENC_DEC_BID = "encoder_decoder_bidirectional"
 BATCH_SIZE      = 2048
-EPOCHS          = 1500
-PATIENCE        = 100
-STEPS = [24, 24]
+EPOCHS          = 200
+PATIENCE        = 25
+#endregion
 
-# =================== CLASSE DE HIPERPARÂMETROS ===================
+
+#region ================ CLASSE DE HIPERPARÂMETROS ==================
 class MZDN_HP:
-  def __init__(self, grandezas, error_f, h_layers=None, arq=None):
+  def __init__(self, grandezas, error_f, h_layers, steps, arq=None):
     self.grandezas              = grandezas # [0] contém X e [1] contém Y
     self.width_x, self.width_y  = len(self.grandezas[0]), len(self.grandezas[1])
-    self.steps_b, self.steps_f  = STEPS     # [0] conterá Back e [1] conterá Forward
+    self.steps_b, self.steps_f  = steps, 24
     self.error_f                = error_f
     self.h_layers               = h_layers
     self.arq                    = arq
 
-  def salvar(self):
+  # Persiste os hiperparâmetros no diretório especificado
+  def salvar(self, diretorio):
     hp_dict = {
-      "grandezas" : self.hp.grandezas,
-      "error_f"   : self.hp.error_f,
-      "steps_f"   : self.hp.steps_f,
-      "steps_b"   : self.hp.steps_b,
-      "h_layers"  : self.hp.h_layers,
-      "arq"       : self.hp.arq,
+      "grandezas" : self.grandezas,
+      "error_f"   : self.error_f,
+      "steps_f"   : self.steps_f,
+      "steps_b"   : self.steps_b,
+      "h_layers"  : self.h_layers,
+      "arq"       : self.arq,
     }
-    with open(f'{self.diretorio}/params.csv', 'w') as f:
+    with open(f'{diretorio}/modelo/params.csv', 'w') as f:
       w = csv.DictWriter(f, hp_dict.keys())
       w.writeheader()
       w.writerow(hp_dict)
-    np.save(f"{self.diretorio}/params.npy", hp_dict)
+    np.save(f"{diretorio}/modelo/params.npy", hp_dict)
     gc.collect()
+#endregion
 
 
-# ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
+#region ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
 class MZDN_HF:
   
-  # CONSTRUTORES
+  #region CONSTRUTORES
   # Construtor 1: fornece apenas [diretorio] OU [modelo, scalers, diretorio] -> uso web!
-  def __init__(self, diretorio, modelo=None, scalers=None, debug=True):
+  # Instância restrita p/ previsão.
+  def __init__(self, diretorio, modelo=None, scalers=None, debug=True): 
     
     self.diretorio = diretorio
+    self.nome      = diretorio.split("__modelos")[-1]
     self.debug     = debug
     self.only_prev = True
-    self.stats = []
+    self.stats     = []
+    self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
+    self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
+    self.scalers_y_path          = f'{diretorio}/scalers/scalers_y.gz'
+    self.hp_dict_path            = f'{diretorio}/modelo/params.npy'
+    self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
+    self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
+    self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
 
-    # Se infomou scalers usa. Senão -> busca no disco pelo dir
+    # Se infomou scalers usa. Senão -> busca no disco pelo [dir + complemento scalers]
     if(scalers is not None):
       self.scalers_x = scalers[0]
       self.scalers_y = scalers[1]
     else:
-      self.scalers_x = joblib.load(f'{diretorio}/scalers_x.gz')
-      self.scalers_y = joblib.load(f'{diretorio}/scalers_y.gz')
-      
-    # Se infomou modelo usa. Senão -> busca no disco pelo dir
-    if(modelo is not None):
-      self.modelo    = modelo
-    else:
-      self.modelo    = self.carrega_modelo(diretorio)
+      self.scalers_x = joblib.load(self.scalers_x_path)
+      self.scalers_y = joblib.load(self.scalers_y_path)
 
     # Hiperparâmetros buscados do diretório
-    hp_dict = np.load(f'{diretorio}/params.npy', allow_pickle='TRUE').item()
+    hp_dict = np.load(self.hp_dict_path, allow_pickle='TRUE').item()
     self.hp = MZDN_HP(hp_dict["grandezas"], 
                      [hp_dict["steps_b"], hp_dict["steps_f"]],
                       hp_dict["error_f"],
                       hp_dict["h_layers"],
                       hp_dict["arq"])
+    
+    # Se infomou modelo usa. Senão -> constroi pelos [HPs] e busca no disco pelo [dir + compelemento model]
+    if(modelo is not None):
+      self.modelo    = modelo
+    else:
+      self.modelo    = self.__get_arquitetura_compilada()
+      self.modelo    = tf.keras.models.load_model(self.checkpointed_model_path)
+
     gc.collect()
 
   # Construtor 2: fornece apenas [diretorio, hiperparâmetros] -> scalers e modelo serão gerados -> uso lab!
+  # Instância de treinamento, telatório e previsão
   def __init__(self, diretorio, hp, debug=True):
     # Básico
     self.diretorio = diretorio
-    self.nome      = diretorio.split("/")[-1]
+    self.nome      = diretorio.split("__modelos")[-1]
     self.debug     = debug
     self.only_prev = False
-    self.stats = []
+    self.stats     = []
+    self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
+    self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
+    self.scalers_y_path          = f'{diretorio}/scalers/scalers_y.gz'
+    self.hp_dict_path            = f'{diretorio}/modelo/params.npy'
+    self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
+    self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
+    self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
     # Modelo e scalers serão gerados (construtor de treinamento)
     self.modelo    = None
     self.scalers_x = None
     self.scalers_y = None
     # Hiperparâmetros
-    self.hp = hp
+    self.hp        = hp
+  #endregion
 
+  #region AUXILIARES
   def print_if_debug(self, args):
     if(self.debug):
       print(args)
+  #endregion
 
-  # Pré-processamento
+  #region PRÉ-PROCESSAMENTO
   def gera_pre_proc_XY(self, _dict, iteracoes_teste, treinamento_e_salva_scalers):
     #################################################################### PRÉ PROCESSAMENTO ################################################################## 
     df = pd.DataFrame(_dict).set_index("data")
@@ -118,8 +143,8 @@ class MZDN_HF:
       df_X = self.scalers_x.fit_transform(X) 
       df_Y = self.scalers_y.fit_transform(Y)
 
-      joblib.dump(self.scalers_x, f'{self.diretorio}/scalers_x.gz')
-      joblib.dump(self.scalers_y, f'{self.diretorio}/scalers_y.gz') 
+      joblib.dump(self.scalers_x, self.scalers_x_path)
+      joblib.dump(self.scalers_y, self.scalers_y_path) 
       self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
     else:
       df_X = self.scalers_x.transform(X) 
@@ -135,7 +160,6 @@ class MZDN_HF:
     Y_train, Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
     return [df_X, df_Y], [X_train, Y_train], [X_test, Y_test]
 
-  # Auxiliar no pré-processamento
   def __substitui_nulos_e_nan(self, df):
     for grandeza in df.columns:
       if(df[grandeza].dtypes != 'float'):
@@ -149,39 +173,6 @@ class MZDN_HF:
         df[grandeza] = df[grandeza].bfill().fillna(media)
     return df
   
-  def carrega_e_compila(self, diretorio): 
-    loaded_model = self.carrega_modelo(diretorio)
-    loaded_model = self.compila(loaded_model)
-    return loaded_model
-
-  def carrega_modelo(diretorio): 
-    # load json and create model
-    json_file = open(f'{diretorio}/modelo.json', 'r')
-    loaded_model_json = json_file.read()
-    json_file.close() 
-    loaded_model = model_from_json(loaded_model_json)
-    # load weights into new model
-    loaded_model.load_weights(f"{diretorio}/modelo.h5")
-    gc.collect()
-    return loaded_model
-  
-  def compila(self, model): 
-    model.compile(loss=self.hp.error_f, optimizer='nadam', metrics=[self.hp.error_f]) 
-    return model
-  
-  def salva_modelo(self, model, diretorio): 
-    if(self.only_prev):
-      raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
-    
-    # Salva modelo
-    model_json = model.to_json()
-    with open(f"{diretorio}/modelo.json", "w") as json_file:
-        json_file.write(model_json) 
-    model.save_weights(f"{diretorio}/modelo.h5") 
-    self.hp.salvar()
-    self.print_if_debug("Saved model and HP into to disk!")
-    gc.collect()
-
   def to_supervised(self, x_input, y_input):
     x, y         = [], []  
     #loop de dias => supervised com janela móvel de [self.hp.steps_b] passos traseiros 
@@ -193,6 +184,92 @@ class MZDN_HF:
         y.append(_y_aux)     
 
     return np.array(x), np.array(y)
+  #endregion
+  
+  #region ARQUITETURAS LSTM
+  # encoder-decoder necessário pois se trata de um seq2seq com tamanhos assimétricos. Uma LSTM simples não funcionaria.
+  def __lstm_encoder_decoder_bidireccional(self):
+    model = keras.Sequential() 
+    # Encoder (bidirectional)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.Bidirectional(
+      layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5)
+    ))
+    model.add(layers.RepeatVector(self.hp.steps_f))    
+    # Decoder (unidirectional)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
+    # Decoder (dense output)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
+  
+  def __lstm_encoder_decoder(self):
+    model = keras.Sequential() 
+    # Encoder (bidirectional)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5))
+    model.add(layers.RepeatVector(self.hp.steps_f))    
+    # Decoder (unidirectional)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
+    # Decoder (dense output)
+    model.add(layers.Dropout(0.8))
+    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
+    return model 
+
+  
+  def __get_arquitetura_compilada(self):
+
+    if(self.hp.arq == ARQ_ENC_DEC):
+      model = self.__lstm_encoder_decoder()
+    elif(self.hp.arq == ARQ_ENC_DEC_BID):
+      model = self.__lstm_encoder_decoder_bidireccional()
+    else:
+      raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\"] -> recebido: \"{self.hp.arq}\"")
+
+    model.compile(
+      loss=self.hp.error_f, 
+      optimizer='nadam', 
+      metrics=[self.hp.error_f]
+    )
+    return model
+  #endregion
+
+  #region RELATÓRIOS ESTATÍSTICOS
+  def __calcula_stats_e_salva(self, history, XY_train, XY_test, early_stopping_monitor):
+    parada              = early_stopping_monitor.stopped_epoch
+    _, test_error       = self.modelo.evaluate(XY_test[0], XY_test[1], verbose=0)
+    val_error_parada    = history.history[f'val_{self.hp.error_f}'][parada]
+    train_error_parada  = history.history[self.hp.error_f][parada]
+    
+    stat_dict = {
+      "Nome"            : self.nome,
+      "Época parada"    : parada,
+      "Função de erro"  : self.hp.error_f,
+      "Erro de treino"  : "{:.4f}".format(train_error_parada),
+      "Erro de valid"   : "{:.4f}".format(val_error_parada),
+      "Erro de teste"   : "{:.4f}".format(test_error),
+    }
+    self.stats.append(stat_dict)
+    self.print_if_debug(stat_dict)
+
+    # Salva estatísticas em csv
+    with open(self.stat_csv_path, 'w') as f:
+      w = csv.DictWriter(f, stat_dict.keys())
+      w.writeheader()
+      w.writerow(stat_dict)
+      
+    # Salva gráficos
+    fg, ax = plt.subplots( nrows=1, ncols=2 ) 
+    ax[0].plot(history.history[self.hp.error_f],          label=f'{self.hp.error_f} de treino')
+    ax[0].plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.hp.error_f} de validação')
+    ax[0].set_xlim([0, EPOCHS])
+    ax[0].set_ylim([0.15, 1.7])
+    ax[0].legend()
+    ax[1].text(0, 0, " "+ str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n") +"\n")
+    fg.savefig(self.stat_pdf_path, bbox_inches='tight')
+    fg.savefig(self.stat_png_path, bbox_inches='tight')
 
   def evaluate_model(self, Y_true_arg, y_predicted_arg):
     scores_mae    = [] 
@@ -233,7 +310,63 @@ class MZDN_HF:
       "r_2"     : r_2[i],
       "ac_pluv" : ac_pluv[i],
       } for i in range(len(scores_mae))]
- 
+
+  #endregion
+  
+  #region TREINAMENTO
+  def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):  
+    # Fast fail ou cria modelo
+    if(self.only_prev):
+      raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
+
+    self.modelo = self.__get_arquitetura_compilada()
+
+    # Pré processamento
+    XY_train  = self.gera_pre_proc_XY(dados_form, iteracoes_teste, True)[1] # XY_train estará em [1]
+
+    # Early stopper (ótima estratégia de regularização)
+    early_stopping_monitor = EarlyStopping(
+      monitor   = f'val_{self.hp.error_f}', 
+      patience  = PATIENCE, 
+      verbose   = 1 if self.debug else 0, 
+      mode      ='auto', 
+      # Nunca usar restore_best_weights = True
+      restore_best_weights = False
+    )
+    
+    # Checkpointer a ser chamado pelo early stopper.
+    checkpointer = ModelCheckpoint(
+      filepath  = self.checkpointed_model_path, 
+      monitor   = f'val_{self.hp.error_f}', 
+      mode      = 'auto', 
+      verbose   = 1 if self.debug else 0, 
+      save_best_only    = True,
+      # Salva arquitetura junto, não apenas os pesos.
+      save_weights_only = False
+    )
+
+    # Treina a arquitetura criada
+    print(XY_train[0].shape)
+    print(XY_train[1].shape)
+    history = self.modelo.fit(
+      x                = XY_train[0], # X
+      y                = XY_train[1], # Y
+      validation_split = 0.15,        # 16% de [2014, 2019] na base clima_bsb => 2019
+      batch_size       = BATCH_SIZE,
+      epochs           = EPOCHS, 
+      shuffle          = False,  
+      callbacks        = [early_stopping_monitor, checkpointer], 
+      verbose          = 2 if self.debug else 0,
+    )
+  
+    # Temos um CHECKPOINTER que persistiu o melhor modelo -> Precisamos apenas recuperá-lo.
+    self.modelo = tf.keras.models.load_model(self.checkpointed_model_path)
+    
+    # Gera relatórios estatísticos do treinamento
+    self.__calcula_stats_e_salva(history, XY_train, XY_train, early_stopping_monitor)
+  #endregion
+
+  #region PREVISÕES
   def retorna_prev_e_erros(self, prev_test, Y_true, prev, funcao_analise=None):
     scores      = self.evaluate_model(Y_true, prev_test) 
     prev_finais = []
@@ -263,133 +396,19 @@ class MZDN_HF:
        
     return lista_intervalo
 
-  def __lstm_encoder_decoder_bidireccional(self):
-    model = keras.Sequential() 
-    # Encoder (bidirectional)
-    model.add(layers.Dropout(0.5))
-    model.add(layers.Bidirectional(
-      layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5)
-    ))
-    # Enc -> Dec
-    model.add(layers.RepeatVector(self.hp.steps_f))    
-    # Decoder (unidirectional)
-    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
-  
-  def __lstm_encoder_decoder(self):
-    model = keras.Sequential() 
-    # Encoder (bidirectional)
-    model.add(layers.Dropout(0.5))
-    model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5))
-    # Enc -> Dec
-    model.add(layers.RepeatVector(self.hp.steps_f))    
-    # Decoder (unidirectional)
-    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
-  
-  def __lstm_normal(self):
-    model = keras.Sequential()
-    model.add(layers.Dropout(0.5))
-    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
-
-  def __lstm_normal_bidireccional(self):
-    model = keras.Sequential()
-    model.add(layers.Dropout(0.5))
-    model.add(layers.LSTM(layers.Bidirectional(self.hp.h_layers, return_sequences=True, dropout=0.5)))
-    model.add(layers.Dropout(0.5))
-    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
-
-  def __calcula_stats_e_salva(self, model, history, XY_train, XY_test, early_stopping_monitor):
-    # _, train_error_f_stat = model.evaluate(XY_train[0], XY_train[1], verbose=0)
-    _, test_error_f_stat  = model.evaluate(XY_test[0], XY_test[1], verbose=0)
-    val_error_f_stat = history.history[f'val_{self.hp.error_f}'][-1]
-    train_error_f_stat = history.history[self.hp.error_f][-1]
-    stat_dict = {
-      "nome": self.nome,
-      "error_f": self.hp.error_f,
-      "treino": train_error_f_stat,
-      "validacao": val_error_f_stat,
-      "teste": test_error_f_stat,
-      "epoch_parada": early_stopping_monitor.stopped_epoch,
-      "history_val_error_f": history.history[f'val_{self.hp.error_f}'],
-      "history_error_f": history.history[self.hp.error_f],
-    }
-    self.stats.append(stat_dict)
-    self.print_if_debug(stat_dict)
-
-    # Salva estatísticas
-    # Locais
-    with open(f'{self.diretorio}/stats.csv', 'w') as f:
-      w = csv.DictWriter(f, stat_dict.keys())
-      w.writeheader()
-      w.writerow(stat_dict)
-    # Salva gráficos de stats locais e cumulativos
-    # Locais
-    fg, ax = plt.subplots( nrows=1, ncols=1 ) 
-    ax.plot(history.history[self.hp.error_f],          label=f'{self.nome}: train {self.hp.error_f}={"{:.4f}".format(train_error_f_stat)}')
-    ax.plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.nome}: valid {self.hp.error_f}={"{:.4f}".format(val_error_f_stat)}')
-    ax.legend()
-    fg.savefig(f"{self.diretorio}/metricas.pdf", bbox_inches='tight')
-    fg.savefig(f"{self.diretorio}/metricas.png", bbox_inches='tight')
-
-  def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):     
-    if(self.only_prev):
-      raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
-    
-    XY, XY_train, XY_test = self.gera_pre_proc_XY(dados_form, iteracoes_teste, True) 
-    # ##################################################################### LSTM MODEL
-    early_stopping_monitor = EarlyStopping(monitor=self.hp.error_f, patience=PATIENCE, verbose=1, mode='auto')
-    checkpointer = ModelCheckpoint(filepath = f"{self.diretorio}/checkpoint", verbose=0, save_best_only=True)
-
-    if(self.hp.arq == ARQ_NORMAL):
-      model = self.__lstm_normal()
-    elif(self.hp.arq == ARQ_ENC_DEC):
-      model = self.__lstm_encoder_decoder()
-    elif(self.hp.arq == ARQ_NORMAL_BID):
-      model = self.__lstm_normal_bidireccional()
-    elif(self.hp.arq == ARQ_ENC_DEC_BID):
-      model = self.__lstm_encoder_decoder_bidireccional()
-    else:
-      raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_NORMAL}\", \"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\"] -> recebido: \"{self.hp.arq}\"")
-
-    model = self.compila(model)
-    history = model.fit(
-      XY_train[0],            # X
-      XY_train[1],            # Y
-      validation_split = 0.2,
-      batch_size = BATCH_SIZE,
-      epochs = EPOCHS, 
-      shuffle = False,  
-      callbacks=[early_stopping_monitor, checkpointer], 
-      verbose=2,
-    )
-  
-    # Salva o modelo
-    self.salva_modelo(model, self.diretorio)
-    
-    # Gera relatórios estatísticos do treinamento
-    self.__calcula_stats_e_salva(model, history, XY_train, XY_train, early_stopping_monitor)
-    
   def prever(self, dados_form, iteracoes_teste=I_TESTE_PADRAO, inclui_compostas=None, compostas_args=None):     
-    
     df_XY, _, test_XY = self.gera_pre_proc_XY(dados_form, iteracoes_teste) 
-    
     self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {test_XY[0].shape}")
 
-    #--------------- prepara prev ---------------
+    # Prepara prev
     base_prev_x = np.array([df_XY[0][-self.hp.steps_b:,:]])
+    score = self.modelo.evaluate(
+      x = test_XY[0], 
+      y = test_XY[1], 
+      verbose = 0 if self.debug else 1
+    )
 
-    score = self.modelo.evaluate(test_XY[0], test_XY[1], verbose= 0 if self.debug else 1)
-
-    #------------------- debug ------------------
+    # Debug
     self.print_if_debug(f"{self.modelo.metrics_names[1]}: {score[1]}" )
     self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[el for el in base_prev_x[:, :, :self.hp.width_x]]}\n")
     self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
@@ -397,16 +416,18 @@ class MZDN_HF:
     df_pred       = self.modelo.predict(base_prev_x[-1:])
     prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
     
-    #--------------- prepara teste --------------- 
+    # Prepara teste
     df_pred_test  = self.modelo.predict(test_XY[0]) 
     prev_test     = np.array([self.scalers_y.inverse_transform(el) for el in df_pred_test]).reshape(-1, self.hp.width_y)
     Y_true_test   = np.array(self.scalers_y.inverse_transform(test_XY[1].reshape(-1, self.hp.width_y)))
   
-    #--------------- pos proc ---------------
+    # Pós processamento
     if(inclui_compostas is not None):
       prev          = inclui_compostas(prev,        compostas_args)
       prev_test     = inclui_compostas(prev_test,   compostas_args)
       Y_true_test   = inclui_compostas(Y_true_test, compostas_args) 
     
     return self.retorna_prev_e_erros(prev_test, Y_true_test, prev)
-    
+  #endregion 
+
+#endregion    
