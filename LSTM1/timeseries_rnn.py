@@ -55,11 +55,11 @@ class MZDN_HP:
       "h_layers"  : self.h_layers,
       "arq"       : self.arq,
     }
-    with open(f'{diretorio}/modelo/params.csv', 'w') as f:
+    with open(f'{diretorio}/params.csv', 'w') as f:
       w = csv.DictWriter(f, hp_dict.keys())
       w.writeheader()
       w.writerow(hp_dict)
-    np.save(f"{diretorio}/modelo/params.npy", hp_dict)
+    np.save(f"{diretorio}/params.npy", hp_dict)
     gc.collect()
 #endregion
 
