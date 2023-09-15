@@ -84,9 +84,9 @@ class MZDN_HF:
       # Hiperparâmetros buscados do diretório
       hp_dict = np.load(self.hp_dict_path, allow_pickle='TRUE').item()
       self.hp = MZDN_HP(hp_dict["grandezas"], 
-                      [hp_dict["steps_b"], hp_dict["steps_f"]],
+                        [int(hp_dict["steps_b"]), int(hp_dict["steps_f"])],
                         hp_dict["error_f"],
-                        hp_dict["h_layers"],
+                        int(hp_dict["h_layers"]),
                         hp_dict["arq"])
       # Recupera scalers e model do diretorio 
       self.scalers_x = joblib.load(self.scalers_x_path)
