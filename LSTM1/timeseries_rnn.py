@@ -342,7 +342,7 @@ class MZDN_HF:
     )
   
     # Temos um CHECKPOINTER que persistiu o melhor modelo -> Precisamos apenas recuperá-lo.
-    self.modelo = tf.keras.models.load_model(self.checkpointed_model_path)
+    self.modelo = keras.models.load_model(self.checkpointed_model_path)
     
     # Gera relatórios estatísticos do treinamento
     self.__calcula_stats_e_salva(history, XY_train, XY_train, early_stopping_monitor)
