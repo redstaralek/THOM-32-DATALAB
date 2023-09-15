@@ -17,21 +17,11 @@ from matplotlib import pyplot as plt
 EPSLON          = 0.0000001
 RND_ST          = 142
 I_TESTE_PADRAO  = 24
-ARQ_ENC_DEC     = "encoder_decoder"
-ARQ_ENC_DEC_BID = "encoder_decoder_bidirectional"
+ARQ_ENC_DEC     = "enc_dec"
+ARQ_ENC_DEC_BID = "enc_dec_bid"
 BATCH_SIZE      = 2048
 EPOCHS          = 200
 PATIENCE        = 25
-
-def __formata_2_casas(num): 
-  return float('{0:.2f}'.format(num)) if num is not None else None
-
-def __smape(A, F):
-  A       = np.array(A)
-  F       = np.array(F)
-  epsilon = 0.1
-  resp    = 100/len(A) * np.sum(2 * np.abs(F - A) / (np.abs(A) + np.abs(F) + epsilon))
-  return resp if resp == resp else 0 #se não NaN
 #endregion
 
 
@@ -247,52 +237,11 @@ class MZDN_HF:
     ax[0].plot(history.history[self.hp.error_f],          label=f'{self.hp.error_f} de treino')
     ax[0].plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.hp.error_f} de validação')
     ax[0].set_xlim([0, EPOCHS])
-    ax[0].set_ylim([0.15, 1.7])
+    ax[0].set_ylim([0.15, 1.5])
     ax[0].legend()
     ax[1].text(0, 0, " "+ str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n") +"\n")
     fg.savefig(self.stat_pdf_path, bbox_inches='tight')
     fg.savefig(self.stat_png_path, bbox_inches='tight')
-
-  def evaluate_model(self, Y_true_arg, y_predicted_arg):
-    scores_mae    = [] 
-    scores_rmse   = []
-    scores___smape  = []
-    scores_ac     = [] 
-    ac_cat        = [] 
-    ac_pluv       = []
-    r_2           = []
-    for i in range(Y_true_arg.shape[1]):
-      Y_true      =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in Y_true_arg]
-      y_predicted =  [(float(y[i]) if y[i] is not None else float(EPSLON)) for y in y_predicted_arg]  
-
-      scores_mae.append( __formata_2_casas(float( mae(Y_true, y_predicted))))
-      scores_rmse.append(__formata_2_casas(float(rmse(Y_true, y_predicted))))
-      s = __formata_2_casas(float(__smape(Y_true, y_predicted)))
-      scores___smape.append(float(s))
-      scores_ac.append(__formata_2_casas(float(100-s)))   
-      ac_cat.append(None)
-      ac_pluv.append(AcuraciaChuvaUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24, self.hp.steps_b, self.hp.steps_f) if i == 5 else None) 
-      r_2.append(__formata_2_casas(100*r2_score(Y_true, y_predicted)) if i != 5 else None)
-      if(i==4):
-        obj_testagem      = AcuraciaPluvUtil.get_acuracia_distribuicao_diaria(Y_true, y_predicted, 0, 24,  self.hp.steps_b,  self.hp.steps_f, True)  
-        scores_mae[-1]    = __formata_2_casas(obj_testagem["mae"])
-        scores_rmse[-1]   = __formata_2_casas(obj_testagem["rmse"])
-        ac_pluv[-1]       = __formata_2_casas(obj_testagem["ac_cat"]) 
-        r_2[-1]           = __formata_2_casas(obj_testagem["r2"]*100)
-        s                 = __formata_2_casas(obj_testagem["__smape"])
-        scores___smape[-1]  = s
-        scores_ac[-1]     = __formata_2_casas(100-s) 
-    return [{
-      "i"       : i,
-      "mae"     : scores_mae[i],
-      "rmse"    : scores_rmse[i],
-      "__smape"   : scores___smape[i],
-      "ac"      : scores_ac[i],
-      "ac_cat"  : ac_cat[i],
-      "r_2"     : r_2[i],
-      "ac_pluv" : ac_pluv[i],
-      } for i in range(len(scores_mae))]
-
   #endregion
   
   #region TREINAMENTO

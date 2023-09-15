@@ -1,2 +1,2 @@
 Nome,Época parada,Função de erro,Erro de treino,Erro de valid,Erro de teste
-/encoder_decoder/mse__100HL__24B,44,mse,0.6645,0.6473,0.6565
+/encoder_decoder/mse__100HL__24B,48,mse,0.6530,0.6626,0.6383
