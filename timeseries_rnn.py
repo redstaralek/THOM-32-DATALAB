@@ -239,7 +239,7 @@ class MZDN_HF:
     ax[0].set_xlim([0, EPOCHS])
     ax[0].set_ylim([0.15, 1.5])
     ax[0].legend()
-    ax[1].text(0, 0, " "+ str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n") +"\n")
+    ax[1].text(0, 0, str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n").replace("Nome: /", " ") +"\n")
     fg.savefig(self.stat_pdf_path, bbox_inches='tight')
     fg.savefig(self.stat_png_path, bbox_inches='tight')
   #endregion
