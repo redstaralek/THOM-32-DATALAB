@@ -1,0 +1,2 @@
+Nome,Época parada,Função de erro,Erro de treino,Erro de valid,Erro de teste
+/enc_dec_b/mse_200HL_48B,45,mse,0.5337,0.4839,0.4804

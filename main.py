@@ -1,37 +1,7 @@
-import math, os, gc, sys, joblib, pandas as pd, csv, numpy as np, tensorflow as tf
-from tensorflow.compat.v1.keras import backend as K
+import math, gc, csv, datetime, argparse, time
+from tensorflow.python.client import device_lib
 from timeseries_rnn import *
 from estacao import *
-import datetime
-import argparse
-import gc, tensorflow as tf
-
-
-def __keras_init():
-    print( f"num gpus available {len(tf.config.experimental.list_physical_devices('gpu'))}" )
-    # #################################################################### HARDWARE CONFIG
-    GPU = False
-    CPU = True
-    NUM_CORES = 4
-    if GPU:
-        num_GPU = 1
-        num_CPU = 2
-    if CPU:
-        num_CPU = 2
-        num_GPU = 0
-    _config = tf.compat.v1.ConfigProto(intra_op_parallelism_threads = NUM_CORES,
-                                       inter_op_parallelism_threads = NUM_CORES, 
-                                       allow_soft_placement         = True,
-                                       device_count                 = {'CPU' : num_CPU, 'GPU' : num_GPU})
-    K.set_session(tf.compat.v1.Session(config = _config))
-    physical_devices = tf.config.list_physical_devices('GPU')
-    if(len(physical_devices) > 0):
-        tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
-    gc.collect()
-    return None
-
-__keras_init()
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="")
@@ -41,16 +11,19 @@ def parse_args():
     parser.add_argument('--arquivo',                    default='clima_bsb.csv')
     # 1 ano (dados horários) => Último [2014, 2020] na base clima_bsb => [2020] p/ teste
     parser.add_argument('--iteracoes_teste',            default=365*24)
+    parser.add_argument('--batch_size',                 default=1024)
     return parser
 
 def main(args):
+    print(device_lib.list_local_devices())
     X = []
     with open(args.arquivo) as _csv:
         _r = csv.reader(_csv, delimiter=',')
-        linha = args.linha
-        linha_max = args.linha_max
-        treina = args.treina
+        linha       = args.linha
+        linha_max   = args.linha_max
+        treina      = args.treina
         iteracoes_teste = args.iteracoes_teste
+        batch_size      = args.batch_size
 
         for row in _r:
             if linha > 0:
@@ -112,7 +85,7 @@ def main(args):
     
     # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
     arquiteturas = [
-        # ARQ_ENC_DEC, 
+        ARQ_ENC_DEC, 
         ARQ_ENC_DEC_BID
     ]
     hps = [
@@ -132,11 +105,11 @@ def main(args):
     if(treina):
         for arq in arquiteturas:
             for i in range(len(hps)):
-                hp = hps[i]
-                hp.arq = arq
-                diretorio = f"__modelos/{arq}/{hp.error_f}_{hp.h_layers}HL_{hp.steps_b}B"
-                mzdn = MZDN_HF(diretorio, hp, True)
-                print(mzdn.treinar(X, iteracoes_teste))
+                hp          = hps[i]
+                hp.arq      = arq
+                diretorio   = f"__modelos/{arq}/{hp.error_f}_{hp.h_layers}HL_{hp.steps_b}B"
+                mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
+                mzdn.treinar(X, iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X)

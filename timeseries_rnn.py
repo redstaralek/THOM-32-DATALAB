@@ -1,12 +1,9 @@
 #region IMPORTS
-from statsmodels.tools.eval_measures import rmse
-from sklearn.metrics                 import r2_score, mean_absolute_error as mae 
 from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
-from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
-from sklearn.metrics                 import  mean_absolute_error as mae  
-from sklearn.preprocessing           import RobustScaler, StandardScaler
+from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
+from sklearn.preprocessing           import StandardScaler
 from sklearn.model_selection         import train_test_split
 import os, gc, joblib, csv, pandas as pd, numpy as np
 from matplotlib import pyplot as plt
@@ -19,7 +16,6 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "enc_dec"
 ARQ_ENC_DEC_BID = "enc_dec_b"
-BATCH_SIZE      = 2048
 EPOCHS          = 200
 PATIENCE        = 25
 #endregion
@@ -57,7 +53,7 @@ class MZDN_HP:
 #region ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
 class MZDN_HF:
   
-  def __init__(self, diretorio, hp=None, debug=True):
+  def __init__(self, diretorio, hp=None, debug=True, batch_size=1024):
     
     self.diretorio = diretorio
     self.nome      = diretorio.split("__modelos")[-1]
@@ -70,6 +66,7 @@ class MZDN_HF:
     self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
     self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
     self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
+    self.batch_size              = batch_size
 
     if(hp is not None):
       # Se forneceu hp, é uma instância de treinamento (uso lab, apenas)
@@ -283,7 +280,7 @@ class MZDN_HF:
       x                = XY_train[0], # X
       y                = XY_train[1], # Y
       validation_split = 0.15,        # 16% de [2014, 2019] na base clima_bsb => 2019
-      batch_size       = BATCH_SIZE,
+      batch_size       = self.batch_size,
       epochs           = EPOCHS, 
       shuffle          = False,  
       callbacks        = [early_stopping_monitor, checkpointer], 
