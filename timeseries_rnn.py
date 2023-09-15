@@ -26,9 +26,9 @@ class MZDN_HP:
   def __init__(self, grandezas, error_f, h_layers, steps, arq=None):
     self.grandezas              = grandezas # [0] contém X e [1] contém Y
     self.width_x, self.width_y  = len(self.grandezas[0]), len(self.grandezas[1])
-    self.steps_b, self.steps_f  = steps, 24
+    self.steps_b, self.steps_f  = int(steps) , 24
     self.error_f                = error_f
-    self.h_layers               = h_layers
+    self.h_layers               = int(h_layers)
     self.arq                    = arq
 
   # Persiste os hiperparâmetros no diretório especificado
@@ -84,9 +84,9 @@ class MZDN_HF:
       # Hiperparâmetros buscados do diretório
       hp_dict = np.load(self.hp_dict_path, allow_pickle='TRUE').item()
       self.hp = MZDN_HP(hp_dict["grandezas"], 
-                        [int(hp_dict["steps_b"]), int(hp_dict["steps_f"])],
+                        [hp_dict["steps_b"], hp_dict["steps_f"]],
                         hp_dict["error_f"],
-                        int(hp_dict["h_layers"]),
+                        hp_dict["h_layers"],
                         hp_dict["arq"])
       # Recupera scalers e model do diretorio 
       self.scalers_x = joblib.load(self.scalers_x_path)
