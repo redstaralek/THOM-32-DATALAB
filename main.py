@@ -112,7 +112,7 @@ def main(args):
     
     # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
     arquiteturas = [
-        ARQ_ENC_DEC, 
+        # ARQ_ENC_DEC, 
         ARQ_ENC_DEC_BID
     ]
     hps = [
