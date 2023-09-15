@@ -95,7 +95,7 @@ class MZDN_HF:
       self.scalers_x = joblib.load(self.scalers_x_path)
       self.scalers_y = joblib.load(self.scalers_y_path)
       self.modelo    = self.__get_arquitetura_compilada()
-      self.modelo    = tf.keras.models.load_model(self.checkpointed_model_path)
+      self.modelo    = keras.models.load_model(self.checkpointed_model_path)
 
   #region AUXILIARES
   def print_if_debug(self, args):
