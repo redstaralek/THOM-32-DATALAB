@@ -62,7 +62,7 @@ class MZDN_HF:
     self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
     self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
     self.scalers_y_path          = f'{diretorio}/scalers/scalers_y.gz'
-    self.hp_dict_path            = f'{diretorio}/modelo/params.npy'
+    self.hp_dict_path            = f'{diretorio}/params.npy'
     self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
     self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
     self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
