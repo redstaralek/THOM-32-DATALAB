@@ -100,6 +100,10 @@ def main(args):
         MZDN_HP(grandezas, "mse", 400, 24),
         MZDN_HP(grandezas, "mse", 400, 48),
         MZDN_HP(grandezas, "mse", 400, 72),
+
+        MZDN_HP(grandezas, "mse", 600, 24),
+        MZDN_HP(grandezas, "mse", 600, 48),
+        MZDN_HP(grandezas, "mse", 600, 72),
     ]
 
     if(treina):
