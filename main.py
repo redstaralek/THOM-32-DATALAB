@@ -116,7 +116,7 @@ def main(args):
                 mzdn.treinar(X, iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
-        mzdn.prever(X)
+        mzdn.prever(X, 0)
 
 
 
