@@ -54,7 +54,15 @@ class MZDN_HP:
 class MZDN_HF:
   
   def __init__(self, diretorio, hp=None, debug=True, batch_size=1024):
-    
+    '''
+    Construtor
+
+    - diretorio: Diretório a buscar ou salvar dados do modelo e seus hiperparâmetros.
+    - hp: Instância de hiperparâmetros. Para construir instâncias de TESTE. Outrocaso, hp é recuperado do diretório.
+    - debug: Ativa verbose para todos os processos dessa instância.
+
+    -     return: None
+    '''
     self.diretorio = diretorio
     self.nome      = diretorio.split("__modelos")[-1]
     self.debug     = debug
@@ -101,33 +109,45 @@ class MZDN_HF:
   #endregion
 
   #region PRÉ-PROCESSAMENTO
-  def gera_pre_proc_XY(self, _dict, iteracoes_teste, treinamento_e_salva_scalers):
-    #################################################################### PRÉ PROCESSAMENTO ################################################################## 
-    df = pd.DataFrame(_dict).set_index("data")
+  def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
+    '''
+    Pré processa os dados e fornece outputs úteis diversos
+
+    - XY_dict: Dicionário de valores a ser trabalhado
+    - n_tests: A quantidade de elementos p/ teste, se desejado. Padrão = 0
+    - treinamento: Se vai treinar o modelo e persistir scalers. Senão (caso de previsão), procura e utiliza os scalers do diretório.
+
+    -     return: Retorna vetor de 3 posições.
+      - 1º: Vetor no formato [[X], [Y]]. valores PLANOS de X e Y transformados SEM SPLIT.
+      - 2º: Vetor no formato [[X], [Y]]. Valores JANELADOS e transformados de TREINO para X e Y.
+      - 3º: Vetor no formato [[X], [Y]]. Valores JANELADOS e transformados de TESTE para X e Y. Vazios p/ n_tests não especificado.
+    '''
+    df = pd.DataFrame(XY_dict).set_index("data")
     X = self.__substitui_nulos_e_nan(df[self.hp.grandezas[0]])
     Y = self.__substitui_nulos_e_nan(df[self.hp.grandezas[1]])
     
-    if(treinamento_e_salva_scalers):  
+    if(treinamento):  
       self.scalers_y, self.scalers_x = StandardScaler(), StandardScaler()
-      df_X = self.scalers_x.fit_transform(X) 
-      df_Y = self.scalers_y.fit_transform(Y)
+      tX = self.scalers_x.fit_transform(X) 
+      tY = self.scalers_y.fit_transform(Y)
 
       joblib.dump(self.scalers_x, self.scalers_x_path)
       joblib.dump(self.scalers_y, self.scalers_y_path) 
       self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
     else:
-      df_X = self.scalers_x.transform(X) 
-      df_Y = self.scalers_y.transform(Y)   
+      tX = self.scalers_x.transform(X) 
+      tY = self.scalers_y.transform(Y)   
   
-    self.print_if_debug(pd.DataFrame(df_X).describe())
-    self.print_if_debug(pd.DataFrame(df_Y).describe())
+    self.print_if_debug(pd.DataFrame(tX).describe())
+    self.print_if_debug(pd.DataFrame(tY).describe())
 
-    janela_X, janela_Y = self.to_supervised(df_X, df_Y) 
-    test_ratio = iteracoes_teste/len(janela_X)
+    janela_X, janela_Y = self.to_supervised(tX, tY) 
+    test_ratio = n_tests/len(janela_X)
 
-    X_train, X_test = train_test_split(janela_X, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
-    Y_train, Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
-    return [df_X, df_Y], [X_train, Y_train], [X_test, Y_test]
+    janela_X_train, janela_X_test = train_test_split(janela_X, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
+    janela_Y_train, janela_Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
+
+    return [tX, tY], [janela_X_train, janela_Y_train], [janela_X_test, janela_Y_test]
 
   def __substitui_nulos_e_nan(self, df):
     for grandeza in df.columns:
@@ -242,7 +262,7 @@ class MZDN_HF:
   #endregion
   
   #region TREINAMENTO
-  def treinar(self, dados_form, iteracoes_teste=I_TESTE_PADRAO):  
+  def treinar(self, dados_form, n_tests=I_TESTE_PADRAO):  
     # Fast fail ou cria modelo
     if(self.only_prev):
       raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
@@ -250,7 +270,7 @@ class MZDN_HF:
     self.modelo = self.__get_arquitetura_compilada()
 
     # Pré processamento
-    XY_train  = self.gera_pre_proc_XY(dados_form, iteracoes_teste, True)[1] # XY_train estará em [1]
+    XY_train  = self.gera_pre_proc_XY(dados_form, n_tests, True)[1] # XY_train estará em [1]
 
     # Early stopper (ótima estratégia de regularização)
     early_stopping_monitor = EarlyStopping(
@@ -295,38 +315,46 @@ class MZDN_HF:
   #endregion
 
   #region PREVISÕES
-  def prever(self, dados_form, iteracoes_teste=I_TESTE_PADRAO, inclui_compostas=None, compostas_args=None):     
-    df_XY, _, test_XY = self.gera_pre_proc_XY(dados_form, iteracoes_teste) 
-    self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {test_XY[0].shape}")
+  def prever(self, XY_dict, n_tests=I_TESTE_PADRAO):  
+    '''
+    Gera previsão com base em um vetor de entrada. 
+    Se desejada, uma parte do vetor pode ser usada p/ microteste ao contrastar com próximos elementos da sequência.
+    
+    - XY_dict:  Array de dicionários das grandezas
+    - n_tests:  Quantidade de elementos a serem utilizados como microteste ao serem constrastados com próximos elementos da sequência
+    - debug:    Ativa verbose para todos os processos dessa instância.
 
-    # Prepara prev
-    base_prev_x = np.array([df_XY[0][-self.hp.steps_b:,:]])
+    -     return: Retorna vetor de 3 posições.
+      - 1º: Vetor no formato [Y]. Janela única de previsão.
+      - 2º: Vetor no formato [Y]. Janelas previstas (base no split inicial de n_tests)
+      - 3º: Vetor no formato [Y]. Janelas verdadeiras (base no split inicial de n_tests)
+    '''   
+    tXY, _, jan_XY_test = self.gera_pre_proc_XY(XY_dict, n_tests) 
+    self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {jan_XY_test[0].shape}")
+
+    # Score rápido dos últimos dias definidos pelo split
     score = self.modelo.evaluate(
-      x = test_XY[0], 
-      y = test_XY[1], 
+      x = jan_XY_test[0], 
+      y = jan_XY_test[1], 
       verbose = 0 if self.debug else 1
     )
-
-    # Debug
     self.print_if_debug(f"{self.modelo.metrics_names[1]}: {score[1]}" )
+
+    # Prevê próximas leituras com base na última janela
+    base_prev_x   = np.array([tXY[0][-self.hp.steps_b:,:]])
+    df_pred       = self.modelo.predict(base_prev_x[-1:])
+    prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
+
+    # Útil para verificar se está usando o intervalo correto p/ prever
     self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[el for el in base_prev_x[:, :, :self.hp.width_x]]}\n")
     self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
 
-    df_pred       = self.modelo.predict(base_prev_x[-1:])
-    prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
-    
-    # Prepara teste
-    df_pred_test  = self.modelo.predict(test_XY[0]) 
-    prev_test     = np.array([self.scalers_y.inverse_transform(el) for el in df_pred_test]).reshape(-1, self.hp.width_y)
-    Y_true_test   = np.array(self.scalers_y.inverse_transform(test_XY[1].reshape(-1, self.hp.width_y)))
+    # Every test X (jan_XY_test[0]) is predicted and transformed back
+    prev_test     = np.array([self.scalers_y.inverse_transform(el) for el in self.modelo.predict(jan_XY_test[0])]).reshape(-1, self.hp.width_y)
+    # Old true values
+    Y_true_test   = np.array(self.scalers_y.inverse_transform(jan_XY_test[1].reshape(-1, self.hp.width_y)))
   
-    # Pós processamento
-    if(inclui_compostas is not None):
-      prev          = inclui_compostas(prev,        compostas_args)
-      prev_test     = inclui_compostas(prev_test,   compostas_args)
-      Y_true_test   = inclui_compostas(Y_true_test, compostas_args) 
-    
-    return self.prev
+    return prev, prev_test, Y_true_test
   #endregion 
 
 #endregion    
