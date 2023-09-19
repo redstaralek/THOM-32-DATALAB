@@ -3,7 +3,7 @@ from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
-from sklearn.preprocessing           import StandardScaler
+from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
 import os, gc, joblib, csv, pandas as pd, numpy as np
 from matplotlib import pyplot as plt
@@ -16,8 +16,8 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "enc_dec"
 ARQ_ENC_DEC_BID = "enc_dec_b"
-EPOCHS          = 200
-PATIENCE        = 25
+EPOCHS          = 500
+PATIENCE        = 50
 #endregion
 
 
@@ -63,18 +63,18 @@ class MZDN_HF:
 
     -     return: None
     '''
-    self.diretorio = diretorio
-    self.nome      = diretorio.split("__modelos")[-1]
-    self.debug     = debug
-    self.stats     = []
-    self.checkpointed_model_path = f"{diretorio}/checkpointed_model"
-    self.scalers_x_path          = f'{diretorio}/scalers/scalers_x.gz'
-    self.scalers_y_path          = f'{diretorio}/scalers/scalers_y.gz'
-    self.hp_dict_path            = f'{diretorio}/params.npy'
-    self.stat_csv_path           = f'{diretorio}/relatorio/relatorio.csv'
-    self.stat_pdf_path           = f'{diretorio}/relatorio/relatorio.pdf'
-    self.stat_png_path           = f'{diretorio}/relatorio/relatorio.png'
-    self.batch_size              = batch_size
+    self.diretorio        = diretorio
+    self.nome             = diretorio.split("__modelos")[-1]
+    self.debug            = debug
+    self.stats            = []
+    self.checkpoint_path  = f"{diretorio}/checkpointed_model"
+    self.scalers_x_path   = f'{diretorio}/scalers/scalers_x.gz'
+    self.scalers_y_path   = f'{diretorio}/scalers/scalers_y.gz'
+    self.hp_dict_path     = f'{diretorio}/params.npy'
+    self.stat_path          = f'{diretorio}/relatorio/relatorio'
+    self.dataset_pdf_path   = f'{diretorio}/relatorio/relatorio_dataset.pdf'
+    self.t_dataset_pdf_path = f'{diretorio}/relatorio/relatorio_dataset_transformado.pdf'
+    self.batch_size       = batch_size
 
     if(hp is not None):
       # Se forneceu hp, é uma instância de treinamento (uso lab, apenas)
@@ -82,9 +82,9 @@ class MZDN_HF:
       # Hiperparâmetros
       self.hp        = hp
       self.hp.salvar(self.diretorio)
-      # Modelo e scalers serão gerados
-      self.scalers_x = None
-      self.scalers_y = None
+      # Modelo e scalers serão gerados. Inicialmente vazio/nulo
+      self.scalers_x = []
+      self.scalers_y = []
       self.modelo    = None
     else:
       # Se não forneceu hp, é uma instância de previsão (uso web -> produção)
@@ -100,7 +100,7 @@ class MZDN_HF:
       self.scalers_x = joblib.load(self.scalers_x_path)
       self.scalers_y = joblib.load(self.scalers_y_path)
       self.modelo    = self.__get_arquitetura_compilada()
-      self.modelo    = keras.models.load_model(self.checkpointed_model_path)
+      self.modelo    = keras.models.load_model(self.checkpoint_path)
 
   #region AUXILIARES
   def print_if_debug(self, args):
@@ -109,6 +109,44 @@ class MZDN_HF:
   #endregion
 
   #region PRÉ-PROCESSAMENTO
+  
+  @staticmethod
+  def fit_transform(_X, scalers):
+    X = _X.copy()
+    colunas = X.columns.values 
+    for i in range(len(scalers)):
+      X[[colunas[i]]] = scalers[i].fit_transform(X[[colunas[i]]])    
+    return X.values, scalers
+  
+  @staticmethod
+  def inverse(_X, scalers): 
+    X = _X.copy()
+    for i in range(len(scalers)):
+      X[:,i] = scalers[i].inverse_transform(X[:,i].reshape(1, -1))  
+    return X
+
+
+  def salva_distribuicao(self, dataset, path_png):
+    # Uma linha da img p/ cada grandeza ("column"). Uma coluna da img p/ descrição
+    fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(15, 18), gridspec_kw={'width_ratios':[4, 1]}) 
+
+    for i, col in enumerate(dataset.columns.values):
+      p = dataset[col].copy()
+      ax[i, 0].hist(p, label = col, bins=600)
+      ax[i, 0].legend()
+      ax[i, 1].text(0,0,str(pd.DataFrame(p).describe()))
+      ax[i, 1].set_xticks([])
+      ax[i, 1].set_xticks([])
+    fg.savefig(path_png)
+
+  @staticmethod
+  def transform(_X, scalers):
+    X = _X.copy()
+    colunas = X.columns.values 
+    for i in range(len(scalers)):
+      X[[colunas[i]]] = scalers[i].transform(X[[colunas[i]]]) 
+    return X.values
+  
   def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
     '''
     Pré processa os dados e fornece outputs úteis diversos
@@ -125,21 +163,28 @@ class MZDN_HF:
     df = pd.DataFrame(XY_dict).set_index("data")
     X = self.__substitui_nulos_e_nan(df[self.hp.grandezas[0]])
     Y = self.__substitui_nulos_e_nan(df[self.hp.grandezas[1]])
-    
+    tX, tY = [], []
+
     if(treinamento):  
-      self.scalers_y, self.scalers_x = StandardScaler(), StandardScaler()
-      tX = self.scalers_x.fit_transform(X) 
-      tY = self.scalers_y.fit_transform(Y)
+      self.scalers_x = np.repeat(RobustScaler(), self.hp.width_x)
+      self.scalers_y = np.repeat(RobustScaler(), self.hp.width_y)
+      self.print_if_debug(self.scalers_x)
+      self.print_if_debug(self.scalers_y)
+
+      tX, self.scalers_x = MZDN_HF.fit_transform(X, self.scalers_x) 
+      tY, self.scalers_y = MZDN_HF.fit_transform(Y, self.scalers_y) 
+
+      self.print_if_debug(f"SUMÁRIO DADOS NORMAIS:\n {pd.DataFrame(X).describe()}")
+      self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM:\n {pd.DataFrame(tX).describe()}")
+      self.salva_distribuicao(X,  self.dataset_pdf_path)
+      self.salva_distribuicao(pd.DataFrame(tX), self.t_dataset_pdf_path)
 
       joblib.dump(self.scalers_x, self.scalers_x_path)
       joblib.dump(self.scalers_y, self.scalers_y_path) 
       self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
     else:
-      tX = self.scalers_x.transform(X) 
-      tY = self.scalers_y.transform(Y)   
-  
-    self.print_if_debug(f"SUMÁRIO DADOS NORMAIS: {pd.DataFrame(tX).describe()}")
-    self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM: {pd.DataFrame(X).describe()}")
+      tX = MZDN_HF.transform(X, self.scalers_x) 
+      tY = MZDN_HF.transform(Y, self.scalers_y) 
 
     janela_X, janela_Y = self.to_supervised(tX, tY) 
     test_ratio = n_tests/len(janela_X)
@@ -150,15 +195,14 @@ class MZDN_HF:
     return [tX, tY], [janela_X_train, janela_Y_train], [janela_X_test, janela_Y_test]
 
   def __substitui_nulos_e_nan(self, df):
-    for grandeza in df.columns:
+    df = df.copy()
+    for grandeza in df.columns.values:
       if(df[grandeza].dtypes != 'float'):
-        if(self.debug):
-          self.print_if_debug(f'{grandeza} não é float (ignorado).')
+        self.print_if_debug(f'{grandeza} não é float (ignorado).')
         continue
       else:
         media = float(df[grandeza].mean())
-        if(self.debug):
-          self.print_if_debug(f'{grandeza} é float ==> NaNs sobrescritos pela média ({media})!')
+        self.print_if_debug(f'{grandeza} é float ==> NaNs sobrescritos pela média ({media})!')
         df[grandeza] = df[grandeza].bfill().fillna(media)
     return df
   
@@ -244,7 +288,7 @@ class MZDN_HF:
     self.print_if_debug(stat_dict)
 
     # Salva estatísticas em csv
-    with open(self.stat_csv_path, 'w') as f:
+    with open(self.stat_path+".csv", 'w') as f:
       w = csv.DictWriter(f, stat_dict.keys())
       w.writeheader()
       w.writerow(stat_dict)
@@ -257,8 +301,8 @@ class MZDN_HF:
     ax[0].set_ylim([0.15, 1.5])
     ax[0].legend()
     ax[1].text(0, 0, str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n").replace("Nome: /", " ") +"\n")
-    fg.savefig(self.stat_pdf_path, bbox_inches='tight')
-    fg.savefig(self.stat_png_path, bbox_inches='tight')
+    fg.savefig(self.stat_path+".pdf", bbox_inches='tight')
+    fg.savefig(self.stat_path+".png", bbox_inches='tight')
   #endregion
   
   #region TREINAMENTO
@@ -277,14 +321,14 @@ class MZDN_HF:
       monitor   = f'val_{self.hp.error_f}', 
       patience  = PATIENCE, 
       verbose   = 1 if self.debug else 0, 
-      mode      ='auto', 
+      mode      = 'auto', 
       # Nunca usar restore_best_weights = True
       restore_best_weights = False
     )
     
     # Checkpointer a ser chamado pelo early stopper.
     checkpointer = ModelCheckpoint(
-      filepath  = self.checkpointed_model_path, 
+      filepath  = self.checkpoint_path, 
       monitor   = f'val_{self.hp.error_f}', 
       mode      = 'auto', 
       verbose   = 1 if self.debug else 0, 
@@ -308,7 +352,7 @@ class MZDN_HF:
     )
   
     # Temos um CHECKPOINTER que persistiu o melhor modelo -> Precisamos apenas recuperá-lo.
-    self.modelo = keras.models.load_model(self.checkpointed_model_path)
+    self.modelo = keras.models.load_model(self.checkpoint_path)
     
     # Gera relatórios estatísticos do treinamento
     self.__calcula_stats_e_salva(history, XY_train, XY_train, early_stopping_monitor)
@@ -326,7 +370,7 @@ class MZDN_HF:
       - 1º: Vetor no formato [Y]. Janela única de previsão.         Shape = (1, STEPS_FORWARD)
     '''   
     tXY, _, _ = self.gera_pre_proc_XY(XY_dict, 0) 
-    X, Y = tXY
+    X, _ = tXY
     self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n")
 
     # Prevê próximas leituras com base na última janela

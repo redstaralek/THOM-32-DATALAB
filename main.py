@@ -15,7 +15,7 @@ def parse_args():
     return parser
 
 def main(args):
-    print(device_lib.list_local_devices())
+    # print(device_lib.list_local_devices())
     X = []
     with open(args.arquivo) as _csv:
         _r = csv.reader(_csv, delimiter=',')
@@ -27,16 +27,16 @@ def main(args):
 
         for row in _r:
             if linha > 0:
-                horario = int(float(row[2]))
+                horario = int(float(row[1]))
                 data = datetime.datetime.strptime(row[0].split(" ")[0], "%Y-%m-%d")
                 # considera rad apenas entre 8 e 16     (nossas estações causam deformidade às 6~7 e 17~18h)
-                _rad = row[6] if horario>=8 and horario<=16 else 0
+                _rad = row[6] if horario >= 8 and horario <= 16 else 0
                 vazio = math.isnan(float(row[3])) or float(row[3]) is None
                 if(vazio):
                     continue
                 X.append({
                     "data":     data,         
-                    "horario":  int(row[1]), 
+                    "horario":  horario, 
                     "dia_ano":  int(row[2]),     
                     "ano":      int(data.year),      
                     "temp":     float(row[3]) ,             
@@ -89,10 +89,6 @@ def main(args):
         ARQ_ENC_DEC_BID
     ]
     hps = [
-        MZDN_HP(grandezas, "mse", 100, 24),
-        MZDN_HP(grandezas, "mse", 100, 48),
-        MZDN_HP(grandezas, "mse", 100, 72),
-
         MZDN_HP(grandezas, "mse", 200, 24),
         MZDN_HP(grandezas, "mse", 200, 48),
         MZDN_HP(grandezas, "mse", 200, 72),
