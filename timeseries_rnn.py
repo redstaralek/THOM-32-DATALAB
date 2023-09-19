@@ -317,17 +317,13 @@ class MZDN_HF:
   #region PREVISÕES
   def prever(self, XY_dict, n_tests=I_TESTE_PADRAO):  
     '''
-    Gera previsão com base em um vetor de entrada. 
-    Se desejada, uma parte do vetor pode ser usada p/ microtestes ao contrastar com próximos elementos da sequência.
+    Gera previsão com base em um vetor de entrada.
     
     - XY_dict:  Array de dicionários das grandezas
-    - n_tests:  Quantidade de elementos a serem utilizados como microteste ao serem constrastados com próximos elementos da sequência
     - debug:    Ativa verbose para todos os processos dessa instância.
 
     -     return: Retorna vetor de 3 posições.
       - 1º: Vetor no formato [Y]. Janela única de previsão.         Shape = (1, STEPS_FORWARD)
-      - 2º: Vetor no formato [X]. Janelas de input p/ microtestes.  Shape = (janelas(n_tests), STEPS_FORWARD)
-      - 3º: Vetor no formato [[Y_prev], [Y_true]]. Janelas de output previstos vs verdadeiros. Shape = (janelas(n_tests), janelas(n_tests), STEPS_FORWARD)
     '''   
     tXY, _, jan_XY_test = self.gera_pre_proc_XY(XY_dict, n_tests) 
     self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {jan_XY_test[0].shape}")
@@ -348,19 +344,8 @@ class MZDN_HF:
     # Útil para verificar se está usando o intervalo correto p/ prever
     self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[el for el in base_prev_x[:, :, :self.hp.width_x]]}\n")
     self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
-
-    # Toda "janela de teste X" é predita
-    jan_tX_tests       = jan_XY_test[0]
-    jan_tY_prev_tests  = self.modelo.predict(jan_tX_tests)
-    # Tais janelas de teste são retransformadas e planificadas
-    jan_X_tests        = np.array([self.scalers_y.inverse_transform(x) for x in jan_tX_tests]).reshape(-1, self.hp.width_y)
-    jan_Y_prev_tests   = np.array([self.scalers_y.inverse_transform(x) for x in jan_tY_prev_tests]).reshape(-1, self.hp.width_y)
-
-    # Old true values
-    jan_tY_true        = jan_XY_test[1]
-    jan_Y_true         = np.array(self.scalers_y.inverse_transform(jan_tY_true.reshape(-1, self.hp.width_y)))
   
-    return prev, jan_X_tests, [jan_Y_prev_tests, jan_Y_true]
+    return prev
   #endregion 
 
 #endregion    
