@@ -335,8 +335,7 @@ class MZDN_HF:
     prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
 
     # Útil para verificar se está usando o intervalo correto p/ prever
-    self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[x for x in base_prev_x[:, :, :self.hp.width_x]]}\n")
-    self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
+    self.print_if_debug(f"ÚLTIMAS H USADAS: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[-1:]]}\n")
   
     return prev
   #endregion 
