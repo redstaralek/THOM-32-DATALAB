@@ -315,7 +315,7 @@ class MZDN_HF:
   #endregion
 
   #region PREVISÕES
-  def prever(self, XY_dict, n_tests=I_TESTE_PADRAO):  
+  def prever(self, XY_dict):  
     '''
     Gera previsão com base em um vetor de entrada.
     
@@ -325,24 +325,17 @@ class MZDN_HF:
     -     return: Retorna vetor de 3 posições.
       - 1º: Vetor no formato [Y]. Janela única de previsão.         Shape = (1, STEPS_FORWARD)
     '''   
-    tXY, _, jan_XY_test = self.gera_pre_proc_XY(XY_dict, n_tests) 
-    self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n X_test shape = {jan_XY_test[0].shape}")
-
-    # Score rápido dos últimos dias definidos pelo split
-    score = self.modelo.evaluate(
-      x = jan_XY_test[0], 
-      y = jan_XY_test[1], 
-      verbose = 0 if self.debug else 1
-    )
-    self.print_if_debug(f"{self.modelo.metrics_names[1]}: {score[1]}" )
+    tXY, _, _ = self.gera_pre_proc_XY(XY_dict, 0) 
+    X, Y = tXY
+    self.print_if_debug(f"Modelo carregado do disco \n SUMÁRIO DE MODELO: {self.modelo.summary()}\n")
 
     # Prevê próximas leituras com base na última janela
-    base_prev_x   = np.array([tXY[0][-self.hp.steps_b:,:]])
+    base_prev_x   = np.array([X[-self.hp.steps_b:,:]])
     df_pred       = self.modelo.predict(base_prev_x[-1:])
     prev          = np.array([self.scalers_y.inverse_transform(el) for el in df_pred]).reshape(-1, self.hp.width_y)
 
     # Útil para verificar se está usando o intervalo correto p/ prever
-    self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[el for el in base_prev_x[:, :, :self.hp.width_x]]}\n")
+    self.print_if_debug(f"ÚLTIMAS 24 USADAS S/ INVERSE SCALING: \n {[x for x in base_prev_x[:, :, :self.hp.width_x]]}\n")
     self.print_if_debug(f"ÚLTIMAS 24 USADAS C/ INVERSE SCALING: \n {[self.scalers_x.inverse_transform(el) for el in base_prev_x[:, :, :self.hp.width_x]]}\n")  
   
     return prev
