@@ -138,8 +138,8 @@ class MZDN_HF:
       tX = self.scalers_x.transform(X) 
       tY = self.scalers_y.transform(Y)   
   
-    self.print_if_debug(pd.DataFrame(tX).describe())
-    self.print_if_debug(pd.DataFrame(tY).describe())
+    self.print_if_debug(f"SUMÁRIO DADOS NORMAIS: {pd.DataFrame(tX).describe()}")
+    self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM: {pd.DataFrame(X).describe()}")
 
     janela_X, janela_Y = self.to_supervised(tX, tY) 
     test_ratio = n_tests/len(janela_X)
