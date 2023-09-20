@@ -101,15 +101,16 @@ def main(args):
         MZDN_HP(grandezas, "mse", 600, 48),
         MZDN_HP(grandezas, "mse", 600, 72),
     ]
-
+    batches_sizes = [1024, 512, 256]
     if(treina):
-        for arq in arquiteturas:
-            for i in range(len(hps)):
-                hp          = hps[i]
-                hp.arq      = arq
-                diretorio   = f"__modelos/{arq}/{hp.error_f}_{hp.h_layers}HL_{hp.steps_b}B"
-                mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
-                mzdn.treinar(X, iteracoes_teste)
+        for batch_size in batches_sizes:
+            for arq in arquiteturas:
+                for i in range(len(hps)):
+                    hp          = hps[i]
+                    hp.arq      = arq
+                    diretorio   = f"__modelos/{arq}_{batch_size}BT_{hp.h_layers}HL_{hp.steps_b}BS"
+                    mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
+                    mzdn.treinar(X, iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X, 0)

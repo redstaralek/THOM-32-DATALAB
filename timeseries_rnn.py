@@ -5,7 +5,8 @@ from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
 from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
-import os, gc, joblib, csv, pandas as pd, numpy as np
+from sklearn.metrics                 import mean_squared_error as mse
+import os, gc, joblib, csv, math, pandas as pd, numpy as np
 from matplotlib import pyplot as plt
 #endregion
 
@@ -14,8 +15,8 @@ from matplotlib import pyplot as plt
 EPSLON          = 0.0000001
 RND_ST          = 142
 I_TESTE_PADRAO  = 24
-ARQ_ENC_DEC     = "enc_dec"
-ARQ_ENC_DEC_BID = "enc_dec_b"
+ARQ_ENC_DEC     = "ENCDEC"
+ARQ_ENC_DEC_BID = "ENCDEC_BID"
 EPOCHS          = 500
 PATIENCE        = 50
 #endregion
@@ -74,7 +75,8 @@ class MZDN_HF:
     self.stat_path          = f'{diretorio}/relatorio/relatorio'
     self.dataset_pdf_path   = f'{diretorio}/relatorio/relatorio_dataset.pdf'
     self.t_dataset_pdf_path = f'{diretorio}/relatorio/relatorio_dataset_transformado.pdf'
-    self.batch_size       = batch_size
+    self.batch_size         = batch_size
+    self.early_stopper  = None # Empty at both cases, but datalab instance will eventually populate and use it.
 
     if(hp is not None):
       # Se forneceu hp, é uma instância de treinamento (uso lab, apenas)
@@ -83,8 +85,8 @@ class MZDN_HF:
       self.hp        = hp
       self.hp.salvar(self.diretorio)
       # Modelo e scalers serão gerados. Inicialmente vazio/nulo
-      self.scalers_x = []
-      self.scalers_y = []
+      self.scalers_x = None
+      self.scalers_y = None
       self.modelo    = None
     else:
       # Se não forneceu hp, é uma instância de previsão (uso web -> produção)
@@ -110,42 +112,20 @@ class MZDN_HF:
 
   #region PRÉ-PROCESSAMENTO
   
-  @staticmethod
-  def fit_transform(_X, scalers):
-    X = _X.copy()
-    colunas = X.columns.values 
-    for i in range(len(scalers)):
-      X[[colunas[i]]] = scalers[i].fit_transform(X[[colunas[i]]])    
-    return X.values, scalers
-  
-  @staticmethod
-  def inverse(_X, scalers): 
-    X = _X.copy()
-    for i in range(len(scalers)):
-      X[:,i] = scalers[i].inverse_transform(X[:,i].reshape(1, -1))  
-    return X
-
-
   def salva_distribuicao(self, dataset, path_png):
     # Uma linha da img p/ cada grandeza ("column"). Uma coluna da img p/ descrição
-    fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(15, 18), gridspec_kw={'width_ratios':[4, 1]}) 
+    fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(11, 20), gridspec_kw={'width_ratios':[4, 1]}) 
 
     for i, col in enumerate(dataset.columns.values):
       p = dataset[col].copy()
       ax[i, 0].hist(p, label = col, bins=600)
       ax[i, 0].legend()
-      ax[i, 1].text(0,0,str(pd.DataFrame(p).describe()))
+      ax[i, 1].text(0,0,"\n"+str(pd.DataFrame(p).describe())+"\n")
       ax[i, 1].set_xticks([])
-      ax[i, 1].set_xticks([])
+      ax[i, 1].set_yticks([])
+      # ax[i, 1].set_axis_off()
     fg.savefig(path_png)
 
-  @staticmethod
-  def transform(_X, scalers):
-    X = _X.copy()
-    colunas = X.columns.values 
-    for i in range(len(scalers)):
-      X[[colunas[i]]] = scalers[i].transform(X[[colunas[i]]]) 
-    return X.values
   
   def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
     '''
@@ -166,13 +146,10 @@ class MZDN_HF:
     tX, tY = [], []
 
     if(treinamento):  
-      self.scalers_x = np.repeat(RobustScaler(), self.hp.width_x)
-      self.scalers_y = np.repeat(RobustScaler(), self.hp.width_y)
-      self.print_if_debug(self.scalers_x)
-      self.print_if_debug(self.scalers_y)
-
-      tX, self.scalers_x = MZDN_HF.fit_transform(X, self.scalers_x) 
-      tY, self.scalers_y = MZDN_HF.fit_transform(Y, self.scalers_y) 
+      self.scalers_x = RobustScaler()
+      self.scalers_y = RobustScaler()
+      tX = self.scalers_x.fit_transform(X)
+      tY = self.scalers_y.fit_transform(Y)
 
       self.print_if_debug(f"SUMÁRIO DADOS NORMAIS:\n {pd.DataFrame(X).describe()}")
       self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM:\n {pd.DataFrame(tX).describe()}")
@@ -183,8 +160,8 @@ class MZDN_HF:
       joblib.dump(self.scalers_y, self.scalers_y_path) 
       self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
     else:
-      tX = MZDN_HF.transform(X, self.scalers_x) 
-      tY = MZDN_HF.transform(Y, self.scalers_y) 
+      tX = self.scalers_x.transform(X)
+      tY = self.scalers_y.transform(Y)
 
     janela_X, janela_Y = self.to_supervised(tX, tY) 
     test_ratio = n_tests/len(janela_X)
@@ -270,37 +247,77 @@ class MZDN_HF:
   #endregion
 
   #region RELATÓRIOS ESTATÍSTICOS
-  def __calcula_stats_e_salva(self, history, XY_train, XY_test, early_stopping_monitor):
-    parada              = early_stopping_monitor.stopped_epoch
-    _, test_error       = self.modelo.evaluate(XY_test[0], XY_test[1], verbose=0)
-    val_error_parada    = history.history[f'val_{self.hp.error_f}'][parada]
-    train_error_parada  = history.history[self.hp.error_f][parada]
-    
-    stat_dict = {
-      "Nome"            : self.nome,
-      "Época parada"    : parada,
-      "Função de erro"  : self.hp.error_f,
-      "Erro de treino"  : "{:.4f}".format(train_error_parada),
-      "Erro de valid"   : "{:.4f}".format(val_error_parada),
-      "Erro de teste"   : "{:.4f}".format(test_error),
-    }
-    self.stats.append(stat_dict)
-    self.print_if_debug(stat_dict)
+  def __calcula_stats_e_salva(self, history, XY_t_test):
+    parada              = self.early_stopper.stopped_epoch
+    # Modelo na parada
+    val_error_parada    = history.history[f'val_{self.hp.error_f}'][parada-1]
+    train_error_parada  = history.history[self.hp.error_f][parada-1]
 
-    # Salva estatísticas em csv
-    with open(self.stat_path+".csv", 'w') as f:
+    # Melhor modelo (no mínimo de validation error)
+    hist_val            = history.history[f'val_{self.hp.error_f}']
+    melhor_epoca        = hist_val.index(min(hist_val)) + 1
+    val_error_melhor    = history.history[f'val_{self.hp.error_f}'][melhor_epoca-1]
+    train_error_melhor  = history.history[self.hp.error_f][melhor_epoca-1]
+    _, test_error       = self.modelo.evaluate(XY_t_test[0], XY_t_test[1], verbose=0)
+    
+    # Prepara dados de teste NÃO TRANSFORMADO
+    rmses_str = ""
+    rmses     = []
+    X_test    = np.array([self.scalers_x.inverse_transform(x)  for x  in XY_t_test[0]])
+    Y_test    = np.array([self.scalers_y.inverse_transform(y)  for y  in XY_t_test[1]])
+    Y_pred    = np.array([self.scalers_y.inverse_transform(yp) for yp in self.modelo.predict(XY_t_test[0])])
+    for i, grandeza in enumerate(self.hp.grandezas[1]):
+      Y_test_plano = Y_test[:,:,i].reshape(-1)
+      Y_pred_plano = Y_pred[:,:,i].reshape(-1)
+      _rmse = math.sqrt(mse(Y_test_plano, Y_pred_plano))
+      rmses_str += f"\n  - RMSE p/ \"{grandeza}\": {'{:.4f}'.format(_rmse)}"
+      rmses.append('{:.4f}'.format(_rmse))
+
+    # Formata estatísticas: .txt e dictionary p/ [.npy, .csv]
+    stat_str = (f"{self.nome}\n"
+    + f"\nÉpoca de parada: {str(parada)}"
+    + f"\nMelhor época (validação): {str(melhor_epoca)}"
+    + f"\nFunção de erro p/ treino: {self.hp.error_f}"
+    + f"\nFunção de erro - valores gerais (SCALED) \n"
+    + f"\n{self.hp.error_f.title()} trein. (última  época): {'{:.4f}'.format(train_error_parada)}"
+    + f"\n{self.hp.error_f.title()} valid. (última  época): {'{:.4f}'.format(val_error_parada)}"
+    + f"\n{self.hp.error_f.title()} trein. (melhor modelo): {'{:.4f}'.format(train_error_melhor)}"
+    + f"\n{self.hp.error_f.title()} valid. (melhor modelo): {'{:.4f}'.format(val_error_melhor)}"
+    + f"\n{self.hp.error_f.title()} teste  (melhor modelo): {'{:.4f}'.format(test_error)}"
+    + f"\n"
+    + f"\nTeste RMSE - val. por grandeza (UNSCALED) \n{rmses_str}")
+
+    stat_dict = {
+      "nome"                        : self.nome,
+      "parada"                      : parada,
+      "melhorEpoch"                 : melhor_epoca,
+      "erro_treino_parada"          : '{:.4f}'.format(train_error_parada),
+      "erro_valid_parada"           : '{:.4f}'.format(val_error_parada),
+      "erro_treino_melhor"          : '{:.4f}'.format(train_error_melhor),
+      "erro_valid_melhor"           : '{:.4f}'.format(val_error_melhor),
+      "erro_teste_melhor"           : '{:.4f}'.format(test_error),
+      "rmse_unscaled_por_grandeza"  : rmses
+    }
+
+    # Salva estatísticas em .csv e .npy
+    with open(f'{self.stat_path}.csv', 'w') as f:
       w = csv.DictWriter(f, stat_dict.keys())
       w.writeheader()
       w.writerow(stat_dict)
+    np.save(f"{self.stat_path}.npy", stat_dict)
+    gc.collect()
       
     # Salva gráficos
-    fg, ax = plt.subplots( nrows=1, ncols=2 ) 
+    fg, ax = plt.subplots( nrows=1, ncols=2, figsize=(8, 5), gridspec_kw={'width_ratios':[1, 2]}) 
     ax[0].plot(history.history[self.hp.error_f],          label=f'{self.hp.error_f} de treino')
     ax[0].plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.hp.error_f} de validação')
-    ax[0].set_xlim([0, EPOCHS])
-    ax[0].set_ylim([0.15, 1.5])
+    ax[0].scatter([melhor_epoca], [val_error_melhor], marker='*', c='r', zorder=3, s=35)
     ax[0].legend()
-    ax[1].text(0, 0, str(stat_dict).replace("{","").replace("}","").replace("'","").replace("\"","").replace(",", "\n").replace("Nome: /", " ") +"\n")
+    ax[1].text(0, 0, str(stat_str) +"\n")
+    
+    ax[1].set_xticks([])
+    ax[1].set_yticks([])
+    ax[1].set_axis_off()
     fg.savefig(self.stat_path+".pdf", bbox_inches='tight')
     fg.savefig(self.stat_path+".png", bbox_inches='tight')
   #endregion
@@ -314,10 +331,10 @@ class MZDN_HF:
     self.modelo = self.__get_arquitetura_compilada()
 
     # Pré processamento
-    XY_train  = self.gera_pre_proc_XY(dados_form, n_tests, True)[1] # XY_train estará em [1]
+    XY_all_plain, XY_j_train, XY_j_test  = self.gera_pre_proc_XY(dados_form, n_tests, True)
 
     # Early stopper (ótima estratégia de regularização)
-    early_stopping_monitor = EarlyStopping(
+    self.early_stopper = EarlyStopping(
       monitor   = f'val_{self.hp.error_f}', 
       patience  = PATIENCE, 
       verbose   = 1 if self.debug else 0, 
@@ -338,16 +355,14 @@ class MZDN_HF:
     )
 
     # Treina a arquitetura criada
-    print(XY_train[0].shape)
-    print(XY_train[1].shape)
     history = self.modelo.fit(
-      x                = XY_train[0], # X
-      y                = XY_train[1], # Y
+      x                = XY_j_train[0], # X
+      y                = XY_j_train[1], # Y
       validation_split = 0.15,        # 16% de [2014, 2019] na base clima_bsb => 2019
       batch_size       = self.batch_size,
       epochs           = EPOCHS, 
       shuffle          = False,  
-      callbacks        = [early_stopping_monitor, checkpointer], 
+      callbacks        = [self.early_stopper, checkpointer], 
       verbose          = 2 if self.debug else 0,
     )
   
@@ -355,7 +370,7 @@ class MZDN_HF:
     self.modelo = keras.models.load_model(self.checkpoint_path)
     
     # Gera relatórios estatísticos do treinamento
-    self.__calcula_stats_e_salva(history, XY_train, XY_train, early_stopping_monitor)
+    self.__calcula_stats_e_salva(history, XY_j_test)
   #endregion
 
   #region PREVISÕES
