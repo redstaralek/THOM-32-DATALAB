@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+/ENCDEC_1024BT_200HL_48BS,66,17,0.4487,0.6064,0.4836,0.5419,0.3659,"['2.0761', '10.9876', '0.2464', '458.8877', '1.1831']"

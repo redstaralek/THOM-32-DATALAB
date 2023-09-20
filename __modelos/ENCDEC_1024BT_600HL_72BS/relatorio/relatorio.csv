@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+/ENCDEC_1024BT_600HL_72BS,68,19,0.4260,0.6910,0.4613,0.5278,0.3527,"['1.8966', '10.5752', '0.2221', '438.7537', '1.1795']"
