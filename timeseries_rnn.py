@@ -67,16 +67,15 @@ class MZDN_HF:
     self.diretorio        = diretorio
     self.nome             = diretorio.split("__modelos")[-1]
     self.debug            = debug
-    self.stats            = []
     self.checkpoint_path  = f"{diretorio}/checkpointed_model"
     self.scalers_x_path   = f'{diretorio}/scalers/scalers_x.gz'
     self.scalers_y_path   = f'{diretorio}/scalers/scalers_y.gz'
     self.hp_dict_path     = f'{diretorio}/params.npy'
-    self.stat_path          = f'{diretorio}/relatorio/relatorio'
-    self.dataset_pdf_path   = f'{diretorio}/relatorio/relatorio_dataset.pdf'
-    self.t_dataset_pdf_path = f'{diretorio}/relatorio/relatorio_dataset_transformado.pdf'
-    self.batch_size         = batch_size
-    self.early_stopper  = None # Empty at both cases, but datalab instance will eventually populate and use it.
+    self.stat_path        = f'{diretorio}/relatorio/relatorio'
+    self.dataset_path     = f'{diretorio}/relatorio/relatorio_dataset'
+    self.t_dataset_path   = f'{diretorio}/relatorio/relatorio_dataset_transformado'
+    self.batch_size       = batch_size
+    self.early_stopper    = None # Empty at both cases, but datalab instance will eventually populate and use it.
 
     if(hp is not None):
       # Se forneceu hp, é uma instância de treinamento (uso lab, apenas)
@@ -84,10 +83,11 @@ class MZDN_HF:
       # Hiperparâmetros
       self.hp        = hp
       self.hp.salvar(self.diretorio)
-      # Modelo e scalers serão gerados. Inicialmente vazio/nulo
+      # Modelo, scalers e estatísticas serão todos gerados. Inicialmente vazios/nulos
       self.scalers_x = None
       self.scalers_y = None
       self.modelo    = None
+      self.stat_dict = None
     else:
       # Se não forneceu hp, é uma instância de previsão (uso web -> produção)
       self.only_prev = True
@@ -98,11 +98,12 @@ class MZDN_HF:
                         hp_dict["h_layers"],
                         hp_dict["steps_b"],
                         hp_dict["arq"])
-      # Recupera scalers e model do diretorio 
+      # Recupera scalers, model e estatísticas do diretório 
       self.scalers_x = joblib.load(self.scalers_x_path)
       self.scalers_y = joblib.load(self.scalers_y_path)
       self.modelo    = self.__get_arquitetura_compilada()
       self.modelo    = keras.models.load_model(self.checkpoint_path)
+      self.stat_dict = np.load(self.stat_path+".npy")
 
   #region AUXILIARES
   def print_if_debug(self, args):
@@ -112,7 +113,7 @@ class MZDN_HF:
 
   #region PRÉ-PROCESSAMENTO
   
-  def salva_distribuicao(self, dataset, path_png):
+  def salva_distribuicao(self, dataset, path):
     # Uma linha da img p/ cada grandeza ("column"). Uma coluna da img p/ descrição
     fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(11, 20), gridspec_kw={'width_ratios':[4, 1]}) 
 
@@ -124,7 +125,7 @@ class MZDN_HF:
       ax[i, 1].set_xticks([])
       ax[i, 1].set_yticks([])
       # ax[i, 1].set_axis_off()
-    fg.savefig(path_png)
+    fg.savefig(path)
 
   
   def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
@@ -153,8 +154,8 @@ class MZDN_HF:
 
       self.print_if_debug(f"SUMÁRIO DADOS NORMAIS:\n {pd.DataFrame(X).describe()}")
       self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM:\n {pd.DataFrame(tX).describe()}")
-      self.salva_distribuicao(X,  self.dataset_pdf_path)
-      self.salva_distribuicao(pd.DataFrame(tX), self.t_dataset_pdf_path)
+      self.salva_distribuicao(X,  self.dataset_path+".pdf")
+      self.salva_distribuicao(pd.DataFrame(tX), self.t_dataset_path+".pdf")
 
       joblib.dump(self.scalers_x, self.scalers_x_path)
       joblib.dump(self.scalers_y, self.scalers_y_path) 
@@ -287,7 +288,7 @@ class MZDN_HF:
     + f"\n"
     + f"\nTeste RMSE - val. por grandeza (UNSCALED) \n{rmses_str}")
 
-    stat_dict = {
+    self.stat_dict = {
       "nome"                        : self.nome,
       "parada"                      : parada,
       "melhorEpoch"                 : melhor_epoca,
@@ -301,10 +302,10 @@ class MZDN_HF:
 
     # Salva estatísticas em .csv e .npy
     with open(f'{self.stat_path}.csv', 'w') as f:
-      w = csv.DictWriter(f, stat_dict.keys())
+      w = csv.DictWriter(f, self.stat_dict.keys())
       w.writeheader()
-      w.writerow(stat_dict)
-    np.save(f"{self.stat_path}.npy", stat_dict)
+      w.writerow(self.stat_dict)
+    np.save(f"{self.stat_path}.npy", self.stat_dict)
     gc.collect()
       
     # Salva gráficos
