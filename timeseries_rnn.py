@@ -103,7 +103,7 @@ class MZDN_HF:
       self.scalers_y = joblib.load(self.scalers_y_path)
       self.modelo    = self.__get_arquitetura_compilada()
       self.modelo    = keras.models.load_model(self.checkpoint_path)
-      self.stat_dict = np.load(self.stat_path+".npy")
+      self.stat_dict = np.load(self.stat_path+".npy", allow_pickle=True).item()
 
   #region AUXILIARES
   def print_if_debug(self, args):
@@ -165,8 +165,7 @@ class MZDN_HF:
       tY = self.scalers_y.transform(Y)
 
     janela_X, janela_Y = self.to_supervised(tX, tY) 
-    test_ratio = n_tests/len(janela_X)
-
+    test_ratio = n_tests/len(janela_X) if n_tests is not None and n_tests != 0 else None
     janela_X_train, janela_X_test = train_test_split(janela_X, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
     janela_Y_train, janela_Y_test = train_test_split(janela_Y, test_size = test_ratio, shuffle = False, random_state = RND_ST) 
 
