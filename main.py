@@ -1,5 +1,4 @@
-import math, gc, csv, datetime, argparse, time
-from tensorflow.python.client import device_lib
+import math, csv, datetime, argparse
 from timeseries_rnn import *
 from estacao import *
 
@@ -15,7 +14,6 @@ def parse_args():
     return parser
 
 def main(args):
-    # print(device_lib.list_local_devices())
     X = []
     with open(args.arquivo) as _csv:
         _r = csv.reader(_csv, delimiter=',')
@@ -101,7 +99,11 @@ def main(args):
         MZDN_HP(grandezas, "mse", 600, 48),
         MZDN_HP(grandezas, "mse", 600, 72),
     ]
-    batches_sizes = [1024, 512, 256]
+    batches_sizes = [
+        # 1024, 
+        512, 
+        256
+    ]
     if(treina):
         for batch_size in batches_sizes:
             for arq in arquiteturas:

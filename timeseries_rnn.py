@@ -6,7 +6,7 @@ from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
 from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
 from sklearn.metrics                 import mean_squared_error as mse
-import os, gc, joblib, csv, math, pandas as pd, numpy as np
+import gc, joblib, csv, math, pandas as pd, numpy as np
 from matplotlib import pyplot as plt
 #endregion
 
