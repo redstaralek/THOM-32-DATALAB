@@ -1,6 +1,5 @@
 import math, csv, datetime, argparse
 from timeseries_rnn import *
-from estacao import *
 
 def parse_args():
     parser = argparse.ArgumentParser(description="")
