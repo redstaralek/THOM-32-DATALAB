@@ -6,7 +6,7 @@ from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint
 from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
 from sklearn.metrics                 import mean_squared_error as mse
-import gc, joblib, csv, math, pandas as pd, numpy as np
+import gc, joblib, csv, math, pandas as pd, numpy as np, os
 from matplotlib import pyplot as plt
 #endregion
 
@@ -19,6 +19,9 @@ ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
 EPOCHS          = 500
 PATIENCE        = 50
+def cria_diretorio_se_nao_existe(diretorio):
+  if not os.path.exists(diretorio):
+    os.makedirs(diretorio)
 #endregion
 
 
@@ -34,6 +37,7 @@ class MZDN_HP:
 
   # Persiste os hiperparâmetros no diretório especificado
   def salvar(self, diretorio):
+    cria_diretorio_se_nao_existe(diretorio)
     hp_dict = {
       "grandezas" : self.grandezas,
       "error_f"   : self.error_f,
@@ -64,6 +68,10 @@ class MZDN_HF:
 
     -     return: None
     '''
+    cria_diretorio_se_nao_existe(diretorio)
+    cria_diretorio_se_nao_existe(f'{diretorio}/checkpointed_model')
+    cria_diretorio_se_nao_existe(f'{diretorio}/scalers')
+    cria_diretorio_se_nao_existe(f'{diretorio}/relatorio')
     self.diretorio        = diretorio
     self.nome             = diretorio.split("__modelos")[-1]
     self.debug            = debug
@@ -124,7 +132,6 @@ class MZDN_HF:
       ax[i, 1].text(0,0,"\n"+str(pd.DataFrame(p).describe())+"\n")
       ax[i, 1].set_xticks([])
       ax[i, 1].set_yticks([])
-      # ax[i, 1].set_axis_off()
     fg.savefig(path)
 
   
