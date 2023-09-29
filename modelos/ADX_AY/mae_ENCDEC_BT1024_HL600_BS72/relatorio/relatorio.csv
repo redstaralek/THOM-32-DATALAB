@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+modelos/ADX_AY/mae_ENCDEC_BT1024_HL600_BS72,66,17,0.2231,0.3053,0.2688,0.2364,0.2405,"['1.9564', '11.3589', '1.3686', '437.5190', '1.2072']"
