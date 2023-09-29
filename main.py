@@ -19,7 +19,7 @@ def main(args):
 
     if(args.rank_models == "True"):
         print("Gerando ranking de modelos!")
-        print([x for x in MZDN_HF.rank_models("modelos")])
+        print([str(x)+"\n" for x in MZDN_HF.rank_models("modelos")])
         return
 
     X = []
