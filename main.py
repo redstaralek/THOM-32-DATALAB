@@ -3,6 +3,7 @@ from timeseries_rnn import *
 
 def parse_args():
     parser = argparse.ArgumentParser(description="")
+    parser.add_argument('--rank_models',                default=False)
     parser.add_argument('--treina',                     default=True)
     parser.add_argument('--grandezas',                  default="ApDX_ApDY")
     parser.add_argument('--efunc',                      default="mse")
@@ -15,6 +16,12 @@ def parse_args():
     return parser
 
 def main(args):
+
+    if(args.rank_models == "True"):
+        print("Gerando ranking de modelos!")
+        print([x for x in MZDN_HF.rank_models("modelos")])
+        return
+
     X = []
     with open(args.arquivo) as _csv:
         _r = csv.reader(_csv, delimiter=',')
