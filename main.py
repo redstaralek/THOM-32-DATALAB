@@ -67,15 +67,20 @@ def main(args):
                 ["temp", "hum", "pres","temp_d", "hum_d", "pres_d", "rad", "pluv", "ano", "dia_ano", "horario"],  # X
                 ["temp", "hum", "pres", "rad", "pluv"]                                                            # Y
             ],
-        # X: Abs            Y: Abs
-        "AX_AY" : [
-                ["temp", "hum", "pres", "rad", "pluv", "ano", "dia_ano", "horario"],                              # X
-                ["temp", "hum", "pres", "rad", "pluv"]                                                            # Y
-            ],
         # X: Abs + pres_d   Y: Abs + pres_d
         "ApDX_ApDY" : [
                 ["temp", "hum", "pres_d", "rad", "pluv", "ano", "dia_ano", "horario"],                            # X
                 ["temp", "hum", "pres_d", "rad", "pluv"]                                                          # Y
+            ],
+        # X: deltas  Y: deltas
+        "DX_DY" : [
+                ["temp_d", "hum_d", "pres_d", "rad", "pluv", "ano", "dia_ano", "horario"],                        # X
+                ["temp_d", "hum_d", "pres_d", "rad", "pluv"]                                                      # Y
+            ],
+        # X: Abs            Y: Abs
+        "AX_AY" : [
+                ["temp", "hum", "pres", "rad", "pluv", "ano", "dia_ano", "horario"],                              # X
+                ["temp", "hum", "pres", "rad", "pluv"]                                                            # Y
             ],
     }
     

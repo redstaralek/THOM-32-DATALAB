@@ -10,12 +10,15 @@ Datalab para treino e avaliação dos modelos de IA
 
 -Comandos de compilação parcelados:
 
-    . python main.py --grandezas 'ADX_AY' --batch_sizes 1024;
-    . python main.py --grandezas 'AX_AY'  --batch_sizes 1024;
-    . python main.py --grandezas 'ADX_AY' --batch_sizes 1024 		--efunc mae;
-    . python main.py --grandezas 'AX_AY'  --batch_sizes 1024 		--efunc mae;
+    . python main.py --grandezas 'ADX_AY'       --batch_sizes 1024;
+    . python main.py --grandezas 'AX_AY'        --batch_sizes 1024;
+    . python main.py --grandezas 'ApDX_ApDY'    --batch_sizes 1024;
+    . python main.py --grandezas 'ADX_AY'       --batch_sizes 1024    --efunc mae;
+    . python main.py --grandezas 'AX_AY'        --batch_sizes 1024    --efunc mae;
+    . python main.py --grandezas 'ApDX_ApDY'    --batch_sizes 1024    --efunc mae;
+    . python main.py --grandezas 'ApDX_ApDY'    --batch_sizes 1024    --efunc mae;
 
-    . python main.py --grandezas 'ADX_AY' --batch_sizes 512, 256;
-    . python main.py --grandezas 'AX_AY'  --batch_sizes 512, 256;
-    . python main.py --grandezas 'ADX_AY' --batch_sizes 512, 256 	--efunc mae;
-    . python main.py --grandezas 'AX_AY'  --batch_sizes 512, 256 	--efunc mae;
+    . python main.py --grandezas 'ADX_AY' --batch_sizes 512,
+    . python main.py --grandezas 'AX_AY'  --batch_sizes 512,
+    . python main.py --grandezas 'ADX_AY' --batch_sizes 512,    --efunc mae;
+    . python main.py --grandezas 'AX_AY'  --batch_sizes 512,    --efunc mae;
