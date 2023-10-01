@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+modelos/AX_AY/MSE_ENCDEC_BT4096_HL20_BS48,134,35,0.6663,0.7900,0.6858,0.7778,0.5986,"['3.7384', '18.3930', '1.7146', '1144.9294', '1.1834']"

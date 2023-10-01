@@ -1,2 +1,0 @@
-grandezas,error_f,steps_f,steps_b,h_layers,arq
-"[['temp', 'hum', 'pres', 'temp_d', 'hum_d', 'pres_d', 'rad', 'pluv', 'ano', 'dia_ano', 'horario'], ['temp', 'hum', 'pres', 'rad', 'pluv']]",mae,24,48,200,ENCDEC

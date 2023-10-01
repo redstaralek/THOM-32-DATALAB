@@ -1,2 +1,0 @@
-nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
-modelos/ADX_AY/mse_ENCDEC_BID_BT1024_HL400_BS24,59,10,0.4374,0.6532,0.4862,0.5476,0.3757,"['2.0122', '10.7545', '1.2816', '485.3085', '1.1774']"

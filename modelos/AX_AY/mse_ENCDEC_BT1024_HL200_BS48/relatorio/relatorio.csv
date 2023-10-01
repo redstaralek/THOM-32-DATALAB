@@ -1,2 +1,0 @@
-nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
-modelos/AX_AY/mse_ENCDEC_BT1024_HL200_BS48,66,17,0.4574,0.6661,0.4922,0.5777,0.4002,"['2.2612', '10.8246', '1.5705', '485.6504', '1.1792']"
