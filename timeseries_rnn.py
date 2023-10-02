@@ -18,8 +18,8 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
-EPOCHS          = 2000
-PATIENCE        = 250
+EPOCHS          = 300
+PATIENCE        = 50
 def cria_diretorio_se_nao_existe(diretorio):
   if not os.path.exists(diretorio):
     os.makedirs(diretorio)
@@ -59,7 +59,7 @@ class MZDN_HP:
 #region ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
 class MZDN_HF:
   
-  def __init__(self, diretorio, hp=None, debug=True, batch_size=1024):
+  def __init__(self, diretorio, hp=None, debug=True, batch_size=None):
     '''
     Construtor
 
@@ -211,6 +211,7 @@ class MZDN_HF:
 
     # Encoder (bidirectional)
     model.add(layers.Dropout(0.5))
+    
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
@@ -221,11 +222,14 @@ class MZDN_HF:
     model.add(layers.RepeatVector(self.hp.steps_f))    
 
     # Decoder (unidirectional)
-    model.add(layers.Dropout(0.5))
-    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True))
+    if(bidirecional):
+      model.add(layers.Bidirectional(
+        layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True)
+      ))
+    else:
+      model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True))
 
     # Decoder (dense output)
-    model.add(layers.Dropout(0.5))
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
 
     return model

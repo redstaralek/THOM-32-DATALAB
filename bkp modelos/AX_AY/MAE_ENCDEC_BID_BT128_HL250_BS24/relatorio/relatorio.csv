@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+modelos/AX_AY/MAE_ENCDEC_BID_BT128_HL250_BS24,130,31,0.1648,0.2939,0.1953,0.2267,0.2257,"['1.9620', '10.7130', '1.2048', '436.6897', '1.2070']"

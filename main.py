@@ -62,12 +62,10 @@ def main(args):
             linha += 1
 
     grandezas_list  = {
-        # X: Abs + pres_d   Y: Abs + pres_d
         "ApDX_ApDY" : [
                 ["temp", "hum", "pres_d", "rad", "pluv"],    
                 ["temp", "hum", "pres_d", "rad", "pluv"]     
             ],
-        # X: Abs            Y: Abs
         "AX_AY" : [
                 ["temp", "hum", "pres", "rad", "pluv"],      
                 ["temp", "hum", "pres", "rad", "pluv"]       
@@ -82,48 +80,41 @@ def main(args):
     # seu delta horário a fim de resolver incongruências de nível e Chuva (Categ) pois não se pode ter valores discretos na
     # saída com uma rede com função de erro MSE/MAE. Precisa-se de uma rede dedicada para esta grandeza.
     
-    # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
-    arquiteturas = [ 
-        # ARQ_ENC_DEC_BID, 
-        ARQ_ENC_DEC 
-        ]
     hps = [
-        MZDN_HP(grandezas, args.efunc, 10, 72),
-        MZDN_HP(grandezas, args.efunc, 10, 48),
-        MZDN_HP(grandezas, args.efunc, 10, 24),
+        #---------------------------------- bidirecional ----------------------------------
+        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID),       #batch=32 -->   1:30
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID),       #batch=32 -->   1:00
 
-        MZDN_HP(grandezas, args.efunc, 20, 72),
-        MZDN_HP(grandezas, args.efunc, 20, 48),
-        MZDN_HP(grandezas, args.efunc, 20, 24),
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID),       #batch=32 -->   6:00
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID),       #batch=32 -->   5:00
 
-        MZDN_HP(grandezas, args.efunc, 40, 72),
-        MZDN_HP(grandezas, args.efunc, 40, 48),
-        MZDN_HP(grandezas, args.efunc, 40, 24),
-
-        MZDN_HP(grandezas, args.efunc, 80, 72),
-        MZDN_HP(grandezas, args.efunc, 80, 48),
-        MZDN_HP(grandezas, args.efunc, 80, 24),
-
-        MZDN_HP(grandezas, args.efunc, 160, 72),
-        MZDN_HP(grandezas, args.efunc, 160, 48),
-        MZDN_HP(grandezas, args.efunc, 160, 24),
-        
-    ]
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID),       #batch=32 -->  12:00
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID),       #batch=32 -->  10:00
+        #---------------------------------- unidirecional ----------------------------------
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC),           #batch=32 -->   1:00
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC),           #batch=32 -->   0:45
     
-    batch_sizes = [1024, 512]
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC),           #batch=32 -->   5:00
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC),           #batch=32 -->   3:45
+    
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC),           #batch=32 -->  10:00
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC),           #batch=32 -->  10:00
+    ]
+    #                                                         total = 35:30
+    #   com não bidirecionais consumindo mais ~ 50% (17h)
+    #                                                         total > 53:00
+    
+    batch_sizes = [32]
     if(args.batch_sizes is not None):
-        batch_sizes = args.batch_sizes.split(',')
-        batch_sizes = [int(i) for i in batch_sizes]
+        batch_sizes = [int(i) for i in args.batch_sizes.split(',')]
 
     if(args.treina):
         for batch_size in batch_sizes:
-            for arq in arquiteturas:
-                for i in range(len(hps)):
-                    hp          = hps[i]
-                    hp.arq      = arq
-                    diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{arq}_BT{batch_size}_HL{hp.h_layers}_BS{hp.steps_b}"
-                    mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
-                    mzdn.treinar(X, args.iteracoes_teste)
+            for i in range(len(hps)):
+                hp          = hps[i]
+                diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{hp.arq}_BT{batch_size}_HL{hp.h_layers}_BS{hp.steps_b}"
+                mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
+                mzdn.treinar(X, args.iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X, 0)
