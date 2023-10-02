@@ -18,8 +18,8 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
-EPOCHS          = 1000
-PATIENCE        = 100
+EPOCHS          = 2000
+PATIENCE        = 250
 def cria_diretorio_se_nao_existe(diretorio):
   if not os.path.exists(diretorio):
     os.makedirs(diretorio)
@@ -206,43 +206,37 @@ class MZDN_HF:
   
   #region ARQUITETURAS LSTM
   # encoder-decoder necessário pois se trata de um seq2seq com tamanhos assimétricos. Uma LSTM simples não funcionaria.
-  def __lstm_encoder_decoder_bidireccional(self):
+  def __lstm_encoder_decoder(self, bidirecional):
     model = keras.Sequential() 
+
     # Encoder (bidirectional)
     model.add(layers.Dropout(0.5))
-    model.add(layers.Bidirectional(
-      layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
-    ))
+    if(bidirecional):
+      model.add(layers.Bidirectional(
+        layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
+      ))
+    else:
+      model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x)))
+
     model.add(layers.RepeatVector(self.hp.steps_f))    
+
     # Decoder (unidirectional)
     model.add(layers.Dropout(0.5))
     model.add(layers.LSTM(self.hp.h_layers, return_sequences=True))
+
     # Decoder (dense output)
     model.add(layers.Dropout(0.5))
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
-  
-  def __lstm_encoder_decoder(self):
-    model = keras.Sequential() 
-    # Encoder (bidirectional)
-    model.add(layers.Dropout(0.8))
-    model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), dropout=0.5))
-    model.add(layers.RepeatVector(self.hp.steps_f))    
-    # Decoder (unidirectional)
-    model.add(layers.Dropout(0.8))
-    model.add(layers.LSTM(self.hp.h_layers, return_sequences=True, dropout=0.5))
-    # Decoder (dense output)
-    model.add(layers.Dropout(0.8))
-    model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
-    return model 
+
+    return model
 
   
   def __get_arquitetura_compilada(self):
 
     if(self.hp.arq == ARQ_ENC_DEC):
-      model = self.__lstm_encoder_decoder()
+      model = self.__lstm_encoder_decoder(False)
     elif(self.hp.arq == ARQ_ENC_DEC_BID):
-      model = self.__lstm_encoder_decoder_bidireccional()
+      model = self.__lstm_encoder_decoder(True)
     else:
       raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\"] -> recebido: \"{self.hp.arq}\"")
 

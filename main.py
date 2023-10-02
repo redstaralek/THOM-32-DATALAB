@@ -83,7 +83,10 @@ def main(args):
     # saída com uma rede com função de erro MSE/MAE. Precisa-se de uma rede dedicada para esta grandeza.
     
     # Serão treinados cada um dos hps casos listados em HPs p/ cada arquitetura abaixo
-    arquiteturas = [ ARQ_ENC_DEC_BID, ARQ_ENC_DEC ]
+    arquiteturas = [ 
+        # ARQ_ENC_DEC_BID, 
+        ARQ_ENC_DEC 
+        ]
     hps = [
         MZDN_HP(grandezas, args.efunc, 10, 72),
         MZDN_HP(grandezas, args.efunc, 10, 48),
@@ -96,6 +99,15 @@ def main(args):
         MZDN_HP(grandezas, args.efunc, 40, 72),
         MZDN_HP(grandezas, args.efunc, 40, 48),
         MZDN_HP(grandezas, args.efunc, 40, 24),
+
+        MZDN_HP(grandezas, args.efunc, 80, 72),
+        MZDN_HP(grandezas, args.efunc, 80, 48),
+        MZDN_HP(grandezas, args.efunc, 80, 24),
+
+        MZDN_HP(grandezas, args.efunc, 160, 72),
+        MZDN_HP(grandezas, args.efunc, 160, 48),
+        MZDN_HP(grandezas, args.efunc, 160, 24),
+        
     ]
     
     batch_sizes = [1024, 512]
