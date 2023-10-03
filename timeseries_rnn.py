@@ -18,7 +18,7 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
-EPOCHS          = 250
+EPOCHS          = 400
 PATIENCE        = 50
 def cria_diretorio_se_nao_existe(diretorio):
   if not os.path.exists(diretorio):
