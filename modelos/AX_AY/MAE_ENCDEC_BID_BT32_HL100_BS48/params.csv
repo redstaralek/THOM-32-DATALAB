@@ -1,2 +1,0 @@
-grandezas,error_f,steps_f,steps_b,h_layers,arq
-"[['temp', 'hum', 'pres', 'rad', 'pluv'], ['temp', 'hum', 'pres', 'rad', 'pluv']]",mae,24,48,100,ENCDEC_BID

@@ -1,2 +1,0 @@
-nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
-modelos/AX_AY/MAE_ENCDEC_BID_BT32_HL50_BS24,65,16,0.1675,0.2866,0.1848,0.2359,0.2349,"['2.0854', '10.3085', '1.3075', '460.9468', '1.2069']"

@@ -28,13 +28,15 @@ def cria_diretorio_se_nao_existe(diretorio):
 
 #region ================ CLASSE DE HIPERPARÂMETROS ==================
 class MZDN_HP:
-  def __init__(self, grandezas, error_f, h_layers, steps, arq=None):
+  def __init__(self, grandezas, error_f, h_layers, steps, arq=None, dropout = 0.5, batch_size = 32):
     self.grandezas              = grandezas # [0] contém X e [1] contém Y
     self.width_x, self.width_y  = len(self.grandezas[0]), len(self.grandezas[1])
     self.steps_b, self.steps_f  = steps , 24
     self.error_f                = error_f
     self.h_layers               = h_layers
     self.arq                    = arq
+    self.dropout                = dropout
+    self.batch_size             = batch_size
 
   # Persiste os hiperparâmetros no diretório especificado
   def salvar(self, diretorio):
@@ -46,6 +48,8 @@ class MZDN_HP:
       "steps_b"   : self.steps_b,
       "h_layers"  : self.h_layers,
       "arq"       : self.arq,
+      "dropout"   : self.dropout,
+      "batch_size": self.batch_size
     }
     with open(f'{diretorio}/params.csv', 'w') as f:
       w = csv.DictWriter(f, hp_dict.keys())
@@ -59,7 +63,7 @@ class MZDN_HP:
 #region ============ CLASSE DE [PRE PROC + TREINO + PREV] ===========
 class MZDN_HF:
   
-  def __init__(self, diretorio, hp=None, debug=True, batch_size=None):
+  def __init__(self, diretorio, hp=None, debug=True):
     '''
     Construtor
 
@@ -83,7 +87,6 @@ class MZDN_HF:
     self.stat_path        = f'{diretorio}/relatorio/relatorio'
     self.dataset_path     = f'{diretorio}/relatorio/relatorio_dataset'
     self.t_dataset_path   = f'{diretorio}/relatorio/relatorio_dataset_transformado'
-    self.batch_size       = batch_size
     self.early_stopper    = None # Empty at both cases, but datalab instance will eventually populate and use it.
 
     if(hp is not None):
@@ -106,7 +109,9 @@ class MZDN_HF:
                         hp_dict["error_f"],
                         hp_dict["h_layers"],
                         hp_dict["steps_b"],
-                        hp_dict["arq"])
+                        hp_dict["arq"],
+                        hp_dict["dropout"],
+                        hp_dict["batch_size"])
       # Recupera scalers, model e estatísticas do diretório 
       self.scalers_x = joblib.load(self.scalers_x_path)
       self.scalers_y = joblib.load(self.scalers_y_path)
@@ -210,8 +215,8 @@ class MZDN_HF:
     model = keras.Sequential() 
 
     # Encoder (bidirectional)
-    model.add(layers.Dropout(0.5))
-    
+    if(self.hp.dropout):
+      model.add(layers.Dropout(self.dropout))
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
@@ -222,6 +227,8 @@ class MZDN_HF:
     model.add(layers.RepeatVector(self.hp.steps_f))    
 
     # Decoder (unidirectional)
+    if(self.hp.dropout):
+      model.add(layers.Dropout(self.dropout))
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True)
@@ -230,6 +237,8 @@ class MZDN_HF:
       model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True))
 
     # Decoder (dense output)
+    if(self.hp.dropout):
+      model.add(layers.Dropout(self.dropout))
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
 
     return model
@@ -366,7 +375,7 @@ class MZDN_HF:
       x                = XY_j_train[0], # X
       y                = XY_j_train[1], # Y
       validation_split = 0.15,        # 16% de [2014, 2019] na base clima_bsb => 2019
-      batch_size       = self.batch_size,
+      batch_size       = int(self.hp.batch_size),
       epochs           = EPOCHS, 
       shuffle          = False,  
       callbacks        = [self.early_stopper, checkpointer], 

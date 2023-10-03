@@ -81,40 +81,77 @@ def main(args):
     # saída com uma rede com função de erro MSE/MAE. Precisa-se de uma rede dedicada para esta grandeza.
     
     hps = [
+        #----------------------------------------------------------------------------------
         #---------------------------------- bidirecional ----------------------------------
-        MZDN_HP(grandezas, args.efunc, 10,  72, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID),
+        # -----  batch size 32
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0),
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0.25),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0.25),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0.25),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0.25),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0.25),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0.25),
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0.5),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0.5),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0.5),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0.5),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0.5),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0.5),
 
-        MZDN_HP(grandezas, args.efunc, 50,  72, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID),
-
-        MZDN_HP(grandezas, args.efunc, 100, 72, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID),
-        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID),
+        
+        #-----------------------------------------------------------------------------------
         #---------------------------------- unidirecional ----------------------------------
-        MZDN_HP(grandezas, args.efunc, 10,  72, ARQ_ENC_DEC),
-        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC),
-        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC),
-    
-        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC),
-        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC),
-    
-        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC),
-        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC),
+        # -----  batch size 32
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0),
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0.25),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0.25),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0.25),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0.25),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0.25),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0.25),
+        # 10 layers
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0.5),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0.5),
+        # 50 layers
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0.5),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0.5),
+        # 100 layers
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0.5),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0.5),
+
     ]
-    batch_sizes = [32]
-    if(args.batch_sizes is not None):
-        batch_sizes = [int(i) for i in args.batch_sizes.split(',')]
 
     if(args.treina):
-        for batch_size in batch_sizes:
-            for i in range(len(hps)):
-                hp          = hps[i]
-                diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{hp.arq}_BT{batch_size}_HL{hp.h_layers}_BS{hp.steps_b}"
-                mzdn        = MZDN_HF(diretorio, hp, True, batch_size)
-                mzdn.treinar(X, args.iteracoes_teste)
+        for i in range(len(hps)):
+            hp          = hps[i]
+            diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{hp.arq}_BAT{hp.batch_size}_DOUT{hp.dropout}_HL{hp.h_layers}_BCKW{hp.steps_b}"
+            mzdn        = MZDN_HF(diretorio, hp, True)
+            mzdn.treinar(X, args.iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X, 0)
