@@ -5,7 +5,7 @@ from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
 from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
-from sklearn.metrics                 import mean_squared_error as mse
+from sklearn.metrics                 import mean_squared_error as mse, mean_absolute_error as mae
 import gc, joblib, csv, math, pandas as pd, numpy as np, os
 from itertools import groupby
 from matplotlib import pyplot as plt
@@ -18,7 +18,7 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
-EPOCHS          = 300
+EPOCHS          = 250
 PATIENCE        = 50
 def cria_diretorio_se_nao_existe(diretorio):
   if not os.path.exists(diretorio):
@@ -276,7 +276,8 @@ class MZDN_HF:
       Y_test_plano = Y_test[:,:,i].reshape(-1)
       Y_pred_plano = Y_pred[:,:,i].reshape(-1)
       _rmse = math.sqrt(mse(Y_test_plano, Y_pred_plano))
-      rmses_str += f"\n  - RMSE p/ \"{grandeza}\": {'{:.4f}'.format(_rmse)}"
+      _mae = mae(Y_test_plano, Y_pred_plano)
+      rmses_str += f"\n  - \"{grandeza}\": RMSE={'{:.4f}'.format(_rmse)}; MAE={'{:.4f}'.format(_mae)}"
       rmses.append('{:.4f}'.format(_rmse))
 
     # Formata estatísticas: .txt e dictionary p/ [.npy, .csv]
@@ -315,8 +316,8 @@ class MZDN_HF:
       
     # Salva gráficos
     fg, ax = plt.subplots( nrows=1, ncols=2, figsize=(8, 5), gridspec_kw={'width_ratios':[1, 2]}) 
-    ax[0].plot(history.history[self.hp.error_f],          label=f'{self.hp.error_f} de treino')
-    ax[0].plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.hp.error_f} de validação')
+    ax[0].plot(history.history[self.hp.error_f],          label=f'{self.hp.error_f.upper()} de treino')
+    ax[0].plot(history.history[f'val_{self.hp.error_f}'], label=f'{self.hp.error_f.upper()} de validação')
     ax[0].scatter([melhor_epoca], [val_error_melhor], marker='*', c='r', zorder=3, s=35)
     ax[0].legend()
     ax[1].text(0, 0, str(stat_str) +"\n")

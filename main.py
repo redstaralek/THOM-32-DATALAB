@@ -82,28 +82,28 @@ def main(args):
     
     hps = [
         #---------------------------------- bidirecional ----------------------------------
-        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID),       #batch=32 -->   1:30
-        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID),       #batch=32 -->   1:00
+        MZDN_HP(grandezas, args.efunc, 10,  72, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID),
 
-        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID),       #batch=32 -->   6:00
-        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID),       #batch=32 -->   5:00
+        MZDN_HP(grandezas, args.efunc, 50,  72, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID),
 
-        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID),       #batch=32 -->  12:00
-        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID),       #batch=32 -->  10:00
+        MZDN_HP(grandezas, args.efunc, 100, 72, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID),
         #---------------------------------- unidirecional ----------------------------------
-        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC),           #batch=32 -->   1:00
-        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC),           #batch=32 -->   0:45
+        MZDN_HP(grandezas, args.efunc, 10,  72, ARQ_ENC_DEC),
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC),
     
-        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC),           #batch=32 -->   5:00
-        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC),           #batch=32 -->   3:45
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC),
     
-        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC),           #batch=32 -->  10:00
-        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC),           #batch=32 -->  10:00
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC),
     ]
-    #                                                         total = 35:30
-    #   com não bidirecionais consumindo mais ~ 50% (17h)
-    #                                                         total > 53:00
-    
     batch_sizes = [32]
     if(args.batch_sizes is not None):
         batch_sizes = [int(i) for i in args.batch_sizes.split(',')]
