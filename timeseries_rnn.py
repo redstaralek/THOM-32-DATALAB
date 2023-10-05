@@ -20,6 +20,9 @@ ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
 EPOCHS          = 400
 PATIENCE        = 50
+
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+
 def cria_diretorio_se_nao_existe(diretorio):
   if not os.path.exists(diretorio):
     os.makedirs(diretorio)
@@ -129,13 +132,13 @@ class MZDN_HF:
   
   def salva_distribuicao(self, dataset, path):
     # Uma linha da img p/ cada grandeza ("column"). Uma coluna da img p/ descrição
-    fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(11, 20), gridspec_kw={'width_ratios':[4, 1]}) 
+    fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(7, 11), gridspec_kw={'width_ratios':[3, 1]}) 
 
     for i, col in enumerate(dataset.columns.values):
       p = dataset[col].copy()
-      ax[i, 0].hist(p, label = col, bins=600)
+      ax[i, 0].hist(p, label = col, bins=2000)
       ax[i, 0].legend()
-      ax[i, 1].text(0,0,"\n"+str(pd.DataFrame(p).describe())+"\n")
+      ax[i, 1].text(0,0, str(pd.DataFrame(p).describe()))
       ax[i, 1].set_xticks([])
       ax[i, 1].set_yticks([])
     fg.savefig(path)
@@ -216,7 +219,7 @@ class MZDN_HF:
 
     # Encoder (bidirectional)
     if(self.hp.dropout):
-      model.add(layers.Dropout(self.dropout))
+      model.add(layers.Dropout(self.hp.dropout))
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
@@ -228,7 +231,7 @@ class MZDN_HF:
 
     # Decoder (unidirectional)
     if(self.hp.dropout):
-      model.add(layers.Dropout(self.dropout))
+      model.add(layers.Dropout(self.hp.dropout))
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True)
@@ -238,7 +241,7 @@ class MZDN_HF:
 
     # Decoder (dense output)
     if(self.hp.dropout):
-      model.add(layers.Dropout(self.dropout))
+      model.add(layers.Dropout(self.hp.dropout))
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
 
     return model

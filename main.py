@@ -84,31 +84,25 @@ def main(args):
         #----------------------------------------------------------------------------------
         #---------------------------------- bidirecional ----------------------------------
         # -----  batch size 32
-        # 10 layers
-        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
-        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
-        # 50 layers
-        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
-        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
-        # 100 layers
-        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0),
-        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0),
-        # 10 layers
+        # -----  dropout 0
+        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0),
+        # -----  dropout 0.25
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0.25),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0.25),
-        # 50 layers
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0.25),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0.25),
-        # 100 layers
         MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0.25),
         MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0.25),
-        # 10 layers
+        # -----  dropout 0.50
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0.5),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0.5),
-        # 50 layers
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0.5),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0.5),
-        # 100 layers
         MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0.5),
         MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0.5),
 
@@ -116,31 +110,25 @@ def main(args):
         #-----------------------------------------------------------------------------------
         #---------------------------------- unidirecional ----------------------------------
         # -----  batch size 32
-        # 10 layers
+        # -----  dropout 0
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0),
-        # 50 layers
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0),
-        # 100 layers
         MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0),
         MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0),
-        # 10 layers
+        # -----  dropout 0.25
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0.25),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0.25),
-        # 50 layers
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0.25),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0.25),
-        # 100 layers
         MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0.25),
         MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0.25),
-        # 10 layers
+        # -----  dropout 0.50
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC, 0.5),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC, 0.5),
-        # 50 layers
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC, 0.5),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC, 0.5),
-        # 100 layers
         MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC, 0.5),
         MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC, 0.5),
 
