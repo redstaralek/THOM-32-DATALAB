@@ -85,12 +85,12 @@ def main(args):
         #---------------------------------- bidirecional ----------------------------------
         # -----  batch size 32
         # -----  dropout 0
-        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
-        # MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
-        # MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
-        # MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
-        # MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0),
-        # MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 100, 48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 100, 24, ARQ_ENC_DEC_BID, 0),
         # -----  dropout 0.25
         MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0.25),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0.25),
