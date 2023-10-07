@@ -426,14 +426,17 @@ class MZDN_HF:
     for diretorio_grandeza in diretorios_grandezas:
       diretorios_modelos = os.listdir(f"{base_path}/{diretorio_grandeza}")
       for diretorio_modelo in diretorios_modelos:
-        diretorio_modelo = f"{base_path}/{diretorio_grandeza}/{diretorio_modelo }"
+        diretorio_modelo = f"{base_path}/{diretorio_grandeza}/{diretorio_modelo}"
         error_f = diretorio_modelo.split("/")[-1].split("_")[0]
-        _dict = np.load(f'{diretorio_modelo}/relatorio/relatorio.npy', allow_pickle=True).item()
-        rank.append({
-          "error_f"   : error_f,
-          "nome"      : _dict["nome"],
-          "erro_teste": _dict["erro_teste_melhor"],
-        })
+        try:
+          _dict = np.load(f'{diretorio_modelo}/relatorio/relatorio.npy', allow_pickle=True).item()
+          rank.append({
+            "error_f"   : error_f,
+            "nome"      : _dict["nome"],
+            "erro_teste": _dict["erro_teste_melhor"],
+          })
+        except:
+          pass
       
     ranks_ordenados_por_funcao = []
     for key, value in groupby(rank, lambda d: d['error_f']):
