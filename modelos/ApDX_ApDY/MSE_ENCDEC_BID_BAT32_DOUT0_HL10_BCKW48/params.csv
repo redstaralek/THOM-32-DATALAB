@@ -1,0 +1,2 @@
+grandezas,error_f,steps_f,steps_b,h_layers,arq,dropout,batch_size
+"[['temp', 'hum', 'pres_d', 'rad', 'pluv'], ['temp', 'hum', 'pres_d', 'rad', 'pluv']]",mse,24,48,10,ENCDEC_BID,0,32

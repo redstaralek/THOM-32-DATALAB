@@ -18,7 +18,7 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDEC_BID"
-EPOCHS          = 400
+EPOCHS          = 600
 PATIENCE        = 50
 
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
