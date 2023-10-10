@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+modelos/AX_AY/MAE_ENCDEC_BID_BAT32_DOUT0.25_HL100_BCKW48,102,53,0.1400,0.2288,0.1613,0.2176,0.2132,"['1.9743', '10.4573', '1.0233', '450.5005', '1.2070']"

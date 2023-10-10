@@ -17,7 +17,7 @@ EPSLON          = 0.0000001
 RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
-ARQ_ENC_DEC_BID = "ENCDEC_BID"
+ARQ_ENC_DEC_BID = "ENCDECBID"
 EPOCHS          = 600
 PATIENCE        = 50
 
@@ -420,18 +420,18 @@ class MZDN_HF:
 
   #region RANK MODELS
   @staticmethod
-  def rank_models(base_path):
+  def rank_models(base_path, prop_grupo):
     diretorios_grandezas = os.listdir(base_path)
     rank = []
     for diretorio_grandeza in diretorios_grandezas:
       diretorios_modelos = os.listdir(f"{base_path}/{diretorio_grandeza}")
       for diretorio_modelo in diretorios_modelos:
         diretorio_modelo = f"{base_path}/{diretorio_grandeza}/{diretorio_modelo}"
-        error_f = diretorio_modelo.split("/")[-1].split("_")[0]
+        prop_val = MZDN_HF.getPropDoNomeModelo(prop_grupo, diretorio_modelo)
         try:
           _dict = np.load(f'{diretorio_modelo}/relatorio/relatorio.npy', allow_pickle=True).item()
           rank.append({
-            "error_f"   : error_f,
+            "prop_grupo": prop_val,
             "nome"      : _dict["nome"],
             "erro_teste": _dict["erro_teste_melhor"],
           })
@@ -439,9 +439,26 @@ class MZDN_HF:
           pass
       
     ranks_ordenados_por_funcao = []
-    for key, value in groupby(rank, lambda d: d['error_f']):
+    for key, value in groupby(rank, lambda d: d['prop_grupo']):
       ranks_ordenados_por_funcao.append(sorted(list(value), key=lambda d: d['erro_teste']))
     return ranks_ordenados_por_funcao
+  
+  @staticmethod
+  def getPropDoNomeModelo(prop, nome):
+    if(prop=="erro_f"):
+      return nome.split("/")[-1].split("_")[0]
+    elif(prop=="arq"):
+      return nome.split("/")[-1].split("_")[1]
+    elif(prop=="batch"):
+      return int(nome.split("/")[-1].split("_")[2][3:])
+    elif(prop=="dropout"):
+      return float(nome.split("/")[-1].split("_")[3][4:])
+    elif(prop=="hidden_layers"):
+      return int(nome.split("/")[-1].split("_")[4][2:])
+    elif(prop=="back_window"):
+      return int(nome.split("/")[-1].split("_")[5][4:])
+    else:
+      raise Exception(f"Opção {prop} inválida!")
 
   #endregion
 
