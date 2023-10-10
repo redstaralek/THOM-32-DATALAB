@@ -143,7 +143,6 @@ class MZDN_HF:
       ax[i, 1].set_yticks([])
     fg.savefig(path)
 
-  
   def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
     '''
     Pré processa os dados e fornece outputs úteis diversos
@@ -420,7 +419,7 @@ class MZDN_HF:
 
   #region RANK MODELS
   @staticmethod
-  def rank_models(base_path, prop_grupo):
+  def rank_models(base_path, prop_grupo, filter_hl=None):
     diretorios_grandezas = os.listdir(base_path)
     rank = []
     for diretorio_grandeza in diretorios_grandezas:
@@ -428,8 +427,11 @@ class MZDN_HF:
       for diretorio_modelo in diretorios_modelos:
         diretorio_modelo = f"{base_path}/{diretorio_grandeza}/{diretorio_modelo}"
         prop_val = MZDN_HF.getPropDoNomeModelo(prop_grupo, diretorio_modelo)
+        hl = MZDN_HF.getPropDoNomeModelo("hidden_layers", diretorio_modelo)
         try:
           _dict = np.load(f'{diretorio_modelo}/relatorio/relatorio.npy', allow_pickle=True).item()
+          if(filter_hl is not None and int(hl)!=int(filter_hl)):
+            continue
           rank.append({
             "prop_grupo": prop_val,
             "nome"      : _dict["nome"],
@@ -439,24 +441,24 @@ class MZDN_HF:
           pass
       
     ranks_ordenados_por_funcao = []
-    for key, value in groupby(rank, lambda d: d['prop_grupo']):
+    for key, value in groupby(sorted(rank, key=lambda d: d['prop_grupo']), lambda d: d['prop_grupo']):
       ranks_ordenados_por_funcao.append(sorted(list(value), key=lambda d: d['erro_teste']))
     return ranks_ordenados_por_funcao
   
   @staticmethod
   def getPropDoNomeModelo(prop, nome):
     if(prop=="erro_f"):
-      return nome.split("/")[-1].split("_")[0]
+      return nome.split("/")[-1].split("_")[0].strip().upper()
     elif(prop=="arq"):
-      return nome.split("/")[-1].split("_")[1]
+      return nome.split("/")[-1].split("_")[1].strip().upper()
     elif(prop=="batch"):
-      return int(nome.split("/")[-1].split("_")[2][3:])
+      return int(nome.split("/")[-1].split("_")[2][3:].strip().upper())
     elif(prop=="dropout"):
-      return float(nome.split("/")[-1].split("_")[3][4:])
+      return float(nome.split("/")[-1].split("_")[3][4:].strip().upper())
     elif(prop=="hidden_layers"):
-      return int(nome.split("/")[-1].split("_")[4][2:])
+      return int(nome.split("/")[-1].split("_")[4][2:].strip().upper())
     elif(prop=="back_window"):
-      return int(nome.split("/")[-1].split("_")[5][4:])
+      return int(nome.split("/")[-1].split("_")[5][4:].strip().upper())
     else:
       raise Exception(f"Opção {prop} inválida!")
 

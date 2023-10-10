@@ -4,6 +4,10 @@ from timeseries_rnn import *
 def parse_args():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('--rank_models',                default=False)
+    parser.add_argument('--stat_DOUT',                  default=False)
+    parser.add_argument('--stat_HL',                    default=False)
+    parser.add_argument('--stat_BCW',                   default=False)
+    parser.add_argument('--stat_BID',                   default=False)
     parser.add_argument('--treina',                     default=True)
     parser.add_argument('--grandezas',                  default="ApDX_ApDY")
     parser.add_argument('--efunc',                      default="mse")
@@ -15,6 +19,18 @@ def parse_args():
     parser.add_argument('--batch_sizes',                default=None)
     return parser
 
+def printa_grafico_grupos(grupo_key, filter_hl=None):
+    grupos = MZDN_HF.rank_models("modelos", grupo_key, filter_hl)
+    mae, param = [], []
+    for grupo in grupos:
+        param.append(grupo[0]["prop_grupo"])
+        soma, count = float(0), float(0)
+        for el in grupo:
+            soma += float(el["erro_teste"])
+            count += 1
+        mae.append(soma/count)
+    return mae, param
+
 def main(args):
 
     if(args.rank_models == "True"):
@@ -24,11 +40,55 @@ def main(args):
         for grupo in grupos:
             for el in grupo:
                 print(el)
-        # TODO: print e salva gráfico MAE x dropout
-        # TODO: print e salva gráfico MAE x HL
-        # TODO: print e salva gráfico MAE x Nx
-        # TODO: print e salva gráfico MAE x arq
         return
+    elif(args.stat_DOUT == "True"):
+        print("Gerando gráfico MAE x dropout.")
+        fg, ax = plt.subplots()
+        mae, param = printa_grafico_grupos("dropout")
+        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
+        # repete para cada hidden layer
+        hls = [10, 50, 100, 150]
+        for hl in hls:
+            mae, param = printa_grafico_grupos("dropout", hl)
+            ax.plot(np.array(param), np.array(mae), marker='o', label=hl)
+        ax.legend()
+        ax.xaxis.set_ticks([0, 0.25, 0.5])
+        ax.set_title("MAE x Dropout")
+        fg.savefig("relatorios_gerais/DOUT.pdf")
+        fg.savefig("relatorios_gerais/DOUT.png")
+        plt.show()
+        return
+    elif(args.stat_HL == "True"):
+        print("Gerando gráfico MAE x HL.")
+        fg, ax = plt.subplots()
+        mae, param = printa_grafico_grupos("hidden_layers")
+        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
+        ax.legend()
+        ax.xaxis.set_ticks([10, 50, 100, 150])
+        ax.set_title("MAE x Janelamento")
+        fg.savefig("relatorios_gerais/hidden_layers.pdf")
+        fg.savefig("relatorios_gerais/hidden_layers.png")
+        plt.show()
+        return
+    elif(args.stat_BCW == "True"):
+        print("Gerando gráfico MAE x back_window.")
+        fg, ax = plt.subplots()
+        mae, param = printa_grafico_grupos("back_window")
+        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
+        # repete para cada hidden layer
+        hls = [10, 50, 100, 150]
+        for hl in hls:
+            mae, param = printa_grafico_grupos("back_window", hl)
+            ax.plot(np.array(param), np.array(mae), marker='o', label=hl)
+        ax.legend()
+        ax.xaxis.set_ticks([24, 48])
+        ax.set_title("MAE x Janelamento")
+        fg.savefig("relatorios_gerais/back_window.pdf")
+        fg.savefig("relatorios_gerais/back_window.png")
+        plt.show()
+        return
+    # TODO: print e salva gráfico MAE x HL
+    # TODO: print e salva gráfico MAE x arq
 
     X = []
     with open(args.arquivo) as _csv:
