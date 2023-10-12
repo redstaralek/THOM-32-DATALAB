@@ -18,6 +18,7 @@ RND_ST          = 142
 I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDECBID"
+ARQ_ENC_DEC_BID_OLD = "ENCDEC_BID"
 EPOCHS          = 600
 PATIENCE        = 50
 
@@ -250,10 +251,10 @@ class MZDN_HF:
 
     if(self.hp.arq == ARQ_ENC_DEC):
       model = self.__lstm_encoder_decoder(False)
-    elif(self.hp.arq == ARQ_ENC_DEC_BID):
+    elif(self.hp.arq == ARQ_ENC_DEC_BID or self.hp.arq == ARQ_ENC_DEC_BID_OLD):
       model = self.__lstm_encoder_decoder(True)
     else:
-      raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\"] -> recebido: \"{self.hp.arq}\"")
+      raise Exception(f"Uma arquitetura desconhecida foi solicitada. Esperava-se [\"{ARQ_ENC_DEC}\", \"{ARQ_ENC_DEC_BID}\", \"{ARQ_ENC_DEC_BID_OLD}\" (descontinuado)] -> recebido: \"{self.hp.arq}\"")
 
     model.compile(
       loss=self.hp.error_f, 
