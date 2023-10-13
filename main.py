@@ -129,7 +129,7 @@ def main(args):
     grandezas_list  = {
         "ApDX_ApDY" : [
                 ["temp", "hum", "pres_d", "rad", "pluv"],    
-                ["temp", "hum", "pres_d", "rad", "pluv"]     
+                ["temp", "hum", "pres_d", "rad", "pluv"],
             ],
         "AX_AY" : [
                 ["temp", "hum", "pres", "rad", "pluv"],      
@@ -150,7 +150,7 @@ def main(args):
         #---------------------------------- bidirecional ----------------------------------
         # -----  batch size 32
         # -----  dropout 0
-        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
+        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),

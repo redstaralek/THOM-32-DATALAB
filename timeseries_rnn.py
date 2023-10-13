@@ -3,7 +3,7 @@ from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
-from sklearn.preprocessing           import RobustScaler
+from sklearn.preprocessing           import RobustScaler, StandardScaler, MinMaxScaler
 from sklearn.model_selection         import train_test_split
 from sklearn.metrics                 import mean_squared_error as mse, mean_absolute_error as mae
 import gc, joblib, csv, math, pandas as pd, numpy as np, os
@@ -218,6 +218,10 @@ class MZDN_HF:
     model = keras.Sequential() 
 
     # Encoder (bidirectional)
+    #
+    # INPUT ===> dpout? => [[LSTM (enc)]] => dpout? => [[LSTM (dec)]] => dpout? => [[DENSE]] ===> OUTPUT
+    #
+
     if(self.hp.dropout):
       model.add(layers.Dropout(self.hp.dropout))
     if(bidirecional):
