@@ -122,23 +122,24 @@ def main(args):
                     "hum_d":    float(row[12]),       
                     "pres_d":   float(row[13]),         
                 })
-            if(linha_max is not None and linha > linha_max):
+            if(linha_max is not None and linha > int(linha_max)):
                 break
             linha += 1
 
     grandezas_list  = {
-        "ApDX_ApDY" : [
-                ["temp", "hum", "pres_d", "rad", "pluv"],    
-                ["temp", "hum", "pres_d", "rad", "pluv"],
-            ],
         "AX_AY" : [
-                ["temp", "hum", "pres", "rad", "pluv"],      
-                ["temp", "hum", "pres", "rad", "pluv"]       
+                ["temp",    "hum",      "pres",     "rad",      "pluv"],      
+                ["temp",    "hum",      "pres",     "rad",      "pluv"],
+                [
+                    [RScaler(), RScaler(),  SScaler(),  RScaler(),  MMScaler()],
+                    [RScaler(), RScaler(),  SScaler(),  RScaler(),  MMScaler()]
+                ]
             ],
     }
     
     # Filtra apenas as grandezas desejadas
-    grandezas = grandezas_list[args.grandezas]
+    grandezas = grandezas_list[args.grandezas][0], grandezas_list[args.grandezas][1]
+    scalers   = grandezas_list[args.grandezas][2]
     
     
     # Com referência ao paper anterior, poram subtraídas as grandezas Pres e Chuva (categ). Pres pois foi substituída pelo
@@ -150,7 +151,7 @@ def main(args):
         #---------------------------------- bidirecional ----------------------------------
         # -----  batch size 32
         # -----  dropout 0
-        # MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
+        MZDN_HP(grandezas, args.efunc, 10,  48, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 10,  24, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 50,  48, ARQ_ENC_DEC_BID, 0),
         MZDN_HP(grandezas, args.efunc, 50,  24, ARQ_ENC_DEC_BID, 0),
@@ -216,7 +217,8 @@ def main(args):
             hp          = hps[i]
             diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{hp.arq}_BAT{hp.batch_size}_DOUT{hp.dropout}_HL{hp.h_layers}_BCKW{hp.steps_b}"
             mzdn        = MZDN_HF(diretorio, hp, True)
-            mzdn.treinar(X, args.iteracoes_teste)
+            qtd_testes  = int(args.iteracoes_teste) if args.iteracoes_teste is not None else None
+            mzdn.treinar(X, scalers, qtd_testes)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X, 0)

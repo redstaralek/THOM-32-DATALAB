@@ -3,7 +3,7 @@ from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
-from sklearn.preprocessing           import RobustScaler, StandardScaler, MinMaxScaler
+from sklearn.preprocessing           import RobustScaler as RScaler, StandardScaler as SScaler, MinMaxScaler as MMScaler
 from sklearn.model_selection         import train_test_split
 from sklearn.metrics                 import mean_squared_error as mse, mean_absolute_error as mae
 import gc, joblib, csv, math, pandas as pd, numpy as np, os
@@ -19,7 +19,7 @@ I_TESTE_PADRAO  = 24
 ARQ_ENC_DEC     = "ENCDEC"
 ARQ_ENC_DEC_BID = "ENCDECBID"
 ARQ_ENC_DEC_BID_OLD = "ENCDEC_BID"
-EPOCHS          = 600
+EPOCHS          = 500
 PATIENCE        = 50
 
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -85,8 +85,8 @@ class MZDN_HF:
     self.nome             = diretorio.split("__modelos")[-1]
     self.debug            = debug
     self.checkpoint_path  = f"{diretorio}/checkpointed_model"
-    self.scalers_x_path   = f'{diretorio}/scalers/scalers_x.gz'
-    self.scalers_y_path   = f'{diretorio}/scalers/scalers_y.gz'
+    self.scalers_x_path   = f'{diretorio}/scalers/scalers_x'
+    self.scalers_y_path   = f'{diretorio}/scalers/scalers_y'
     self.hp_dict_path     = f'{diretorio}/params.npy'
     self.stat_path        = f'{diretorio}/relatorio/relatorio'
     self.dataset_path     = f'{diretorio}/relatorio/relatorio_dataset'
@@ -100,8 +100,8 @@ class MZDN_HF:
       self.hp        = hp
       self.hp.salvar(self.diretorio)
       # Modelo, scalers e estatísticas serão todos gerados. Inicialmente vazios/nulos
-      self.scalers_x = None
-      self.scalers_y = None
+      self.scalers_x = []
+      self.scalers_y = []
       self.modelo    = None
       self.stat_dict = None
     else:
@@ -116,9 +116,13 @@ class MZDN_HF:
                         hp_dict["arq"],
                         hp_dict["dropout"],
                         hp_dict["batch_size"])
-      # Recupera scalers, model e estatísticas do diretório 
-      self.scalers_x = joblib.load(self.scalers_x_path)
-      self.scalers_y = joblib.load(self.scalers_y_path)
+      
+      # Recupera scalers, model e estatísticas do diretório
+      for i in range(self.hp.grandezas[0]):
+        self.scalers_x.append(joblib.load(self.scalers_x, self.scalers_x_path+str(i)+".gz"))
+      for i in range(self.hp.grandezas[1]):
+        self.scalers_y.append(joblib.load(self.scalers_y, self.scalers_y_path+str(i)+".gz"))
+
       self.modelo    = self.__get_arquitetura_compilada()
       self.modelo    = keras.models.load_model(self.checkpoint_path)
       self.stat_dict = np.load(self.stat_path+".npy", allow_pickle=True).item()
@@ -144,7 +148,7 @@ class MZDN_HF:
       ax[i, 1].set_yticks([])
     fg.savefig(path)
 
-  def gera_pre_proc_XY(self, XY_dict, n_tests=0, treinamento=False):
+  def gera_pre_proc_XY(self, XY_dict, scalers, n_tests=0, treinamento=False):
     '''
     Pré processa os dados e fornece outputs úteis diversos
 
@@ -160,25 +164,28 @@ class MZDN_HF:
     df = pd.DataFrame(XY_dict).set_index("data")
     X = self.__substitui_nulos_e_nan(df[self.hp.grandezas[0]])
     Y = self.__substitui_nulos_e_nan(df[self.hp.grandezas[1]])
+
     tX, tY = [], []
 
     if(treinamento):  
-      self.scalers_x = RobustScaler()
-      self.scalers_y = RobustScaler()
-      tX = self.scalers_x.fit_transform(X)
-      tY = self.scalers_y.fit_transform(Y)
+      self.scalers_x = scalers[0]
+      self.scalers_y = scalers[1]
+      tX = self.__fit_transform(X, self.scalers_x)
+      tY = self.__fit_transform(Y, self.scalers_y)
 
       self.print_if_debug(f"SUMÁRIO DADOS NORMAIS:\n {pd.DataFrame(X).describe()}")
       self.print_if_debug(f"SUMÁRIO DADOS TRANSFORM:\n {pd.DataFrame(tX).describe()}")
       self.salva_distribuicao(X,  self.dataset_path+".pdf")
       self.salva_distribuicao(pd.DataFrame(tX), self.t_dataset_path+".pdf")
 
-      joblib.dump(self.scalers_x, self.scalers_x_path)
-      joblib.dump(self.scalers_y, self.scalers_y_path) 
+      for i, _ in enumerate(self.hp.grandezas[0]):
+        joblib.dump(self.scalers_x[i], self.scalers_x_path+str(i)+".gz")
+      for i, _ in enumerate(self.hp.grandezas[1]):
+        joblib.dump(self.scalers_y[i], self.scalers_y_path+str(i)+".gz") 
       self.print_if_debug("\n SCALERS SALVOS NO DISCO!\n")  
     else:
-      tX = self.scalers_x.transform(X)
-      tY = self.scalers_y.transform(Y)
+      tX = self.__transform(X, self.scalers_x)
+      tY = self.__transform(Y, self.scalers_y)
 
     janela_X, janela_Y = self.to_supervised(tX, tY) 
     test_ratio = n_tests/len(janela_X) if n_tests is not None and n_tests != 0 else None
@@ -199,6 +206,43 @@ class MZDN_HF:
         df[grandeza] = df[grandeza].bfill().fillna(media)
     return df
   
+  def __fit_transform(self, df, scalers):
+    df = df.copy()
+    for i, grandeza in enumerate(df.columns.values):
+      df[grandeza] = scalers[i].fit_transform(df[[grandeza]])
+    return df
+  
+  def __transform(self, df, scalers):
+    df = df.copy()
+    for i, grandeza in enumerate(df.columns.values):
+      df[grandeza] = scalers[i].transform(df[grandeza])
+    return df
+  
+
+  def __inverse_transform_old(self, df, scalers):
+    df = df.copy()
+    print(df)
+    if not isinstance(df, pd.DataFrame):
+      df = pd.DataFrame(df)
+    for i, grandeza in enumerate(df.columns.values):
+      df[grandeza] = scalers[i].inverse_transform(df[grandeza])
+    return np.array(df.values)
+  
+  def __inverse_transform(self, a, scalers):
+    # Usualmente inputa-se um nparray
+    a = a.copy()
+    print(a.shape)
+    col_num = a.shape[1]
+    arr_final = []
+
+    for i in range(col_num):
+      col = a[:,i]
+      arr_final.append(scalers[i].inverse_transform([col])[0])
+
+    arr_final = np.array(arr_final)
+    print(arr_final)
+    return arr_final
+
   def to_supervised(self, x_input, y_input):
     x, y         = [], []  
     #loop de dias => supervised com janela móvel de [self.hp.steps_b] passos traseiros 
@@ -285,9 +329,9 @@ class MZDN_HF:
     # Prepara dados de teste NÃO TRANSFORMADO
     rmses_str = ""
     rmses     = []
-    X_test    = np.array([self.scalers_x.inverse_transform(x)  for x  in XY_t_test[0]])
-    Y_test    = np.array([self.scalers_y.inverse_transform(y)  for y  in XY_t_test[1]])
-    Y_pred    = np.array([self.scalers_y.inverse_transform(yp) for yp in self.modelo.predict(XY_t_test[0])])
+    # X_test    = np.array([self.__inverse_transform(x,  self.scalers_x)  for x  in XY_t_test[0]])
+    Y_test    = np.array([self.__inverse_transform(y,  self.scalers_y) for y  in XY_t_test[1]])
+    Y_pred    = np.array([self.__inverse_transform(yp, self.scalers_y) for yp in self.modelo.predict(XY_t_test[0])])
     for i, grandeza in enumerate(self.hp.grandezas[1]):
       Y_test_plano = Y_test[:,:,i].reshape(-1)
       Y_pred_plano = Y_pred[:,:,i].reshape(-1)
@@ -301,14 +345,14 @@ class MZDN_HF:
     + f"\nÉpoca de parada: {str(parada)}"
     + f"\nMelhor época (validação): {str(melhor_epoca)}"
     + f"\nFunção de erro p/ treino: {self.hp.error_f}"
-    + f"\nFunção de erro - valores gerais (SCALED) \n"
+    + f"\nErros - valores gerais (SCALED): \n"
     + f"\n{self.hp.error_f.title()} trein. (última  época): {'{:.4f}'.format(train_error_parada)}"
     + f"\n{self.hp.error_f.title()} valid. (última  época): {'{:.4f}'.format(val_error_parada)}"
     + f"\n{self.hp.error_f.title()} trein. (melhor modelo): {'{:.4f}'.format(train_error_melhor)}"
     + f"\n{self.hp.error_f.title()} valid. (melhor modelo): {'{:.4f}'.format(val_error_melhor)}"
     + f"\n{self.hp.error_f.title()} teste  (melhor modelo): {'{:.4f}'.format(test_error)}"
     + f"\n"
-    + f"\nTeste RMSE - val. por grandeza (UNSCALED) \n{rmses_str}")
+    + f"\nErros - val. por grandeza (UNSCALED): \n{rmses_str}")
 
     self.stat_dict = {
       "nome"                        : self.nome,
@@ -346,7 +390,7 @@ class MZDN_HF:
   #endregion
   
   #region TREINAMENTO
-  def treinar(self, dados_form, n_tests=I_TESTE_PADRAO):  
+  def treinar(self, dados_form, scalers, n_tests=I_TESTE_PADRAO):  
     # Fast fail ou cria modelo
     if(self.only_prev):
       raise Exception("Esta é uma instância apenas de previsão, não é permitido: Retreinar; Ressalvar modelo/scalers.")
@@ -354,7 +398,7 @@ class MZDN_HF:
     self.modelo = self.__get_arquitetura_compilada()
 
     # Pré processamento
-    XY_all_plain, XY_j_train, XY_j_test  = self.gera_pre_proc_XY(dados_form, n_tests, True)
+    XY_all_plain, XY_j_train, XY_j_test  = self.gera_pre_proc_XY(dados_form, scalers, n_tests, True)
 
     # Early stopper (ótima estratégia de regularização)
     self.early_stopper = EarlyStopping(
