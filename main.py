@@ -9,7 +9,7 @@ def parse_args():
     parser.add_argument('--stat_BCW',                   default=False)
     parser.add_argument('--stat_BID',                   default=False)
     parser.add_argument('--treina',                     default=True)
-    parser.add_argument('--grandezas',                  default="ApDX_ApDY")
+    parser.add_argument('--grandezas',                  default="AX_AY")
     parser.add_argument('--efunc',                      default="mse")
     parser.add_argument('--linha',                      default=0)
     parser.add_argument('--linha_max',                  default=None)
@@ -128,18 +128,13 @@ def main(args):
 
     grandezas_list  = {
         "AX_AY" : [
-                ["temp",    "hum",      "pres",     "rad",      "pluv"],      
-                ["temp",    "hum",      "pres",     "rad",      "pluv"],
-                [
-                    [RScaler(), RScaler(),  SScaler(),  RScaler(),  MMScaler()],
-                    [RScaler(), RScaler(),  SScaler(),  RScaler(),  MMScaler()]
-                ]
+                ["temp", "hum", "pres", "rad", "pluv"],      
+                ["temp", "hum", "pres", "rad", "pluv"]       
             ],
     }
     
     # Filtra apenas as grandezas desejadas
-    grandezas = grandezas_list[args.grandezas][0], grandezas_list[args.grandezas][1]
-    scalers   = grandezas_list[args.grandezas][2]
+    grandezas = grandezas_list[args.grandezas]
     
     
     # Com referência ao paper anterior, poram subtraídas as grandezas Pres e Chuva (categ). Pres pois foi substituída pelo
@@ -217,8 +212,7 @@ def main(args):
             hp          = hps[i]
             diretorio   = f"modelos/{args.grandezas}/{args.efunc.upper()}_{hp.arq}_BAT{hp.batch_size}_DOUT{hp.dropout}_HL{hp.h_layers}_BCKW{hp.steps_b}"
             mzdn        = MZDN_HF(diretorio, hp, True)
-            qtd_testes  = int(args.iteracoes_teste) if args.iteracoes_teste is not None else None
-            mzdn.treinar(X, scalers, qtd_testes)
+            mzdn.treinar(X, args.iteracoes_teste)
     else:
         mzdn = MZDN_HF(args.diretorio)
         mzdn.prever(X, 0)
