@@ -9,7 +9,7 @@ def parse_args():
     parser.add_argument('--stat_BCW',                   default=False)
     parser.add_argument('--stat_BID',                   default=False)
     parser.add_argument('--treina',                     default=True)
-    parser.add_argument('--grandezas',                  default="ApDX_ApDY")
+    parser.add_argument('--grandezas',                  default="AX_AY")
     parser.add_argument('--efunc',                      default="mse")
     parser.add_argument('--linha',                      default=0)
     parser.add_argument('--linha_max',                  default=None)
