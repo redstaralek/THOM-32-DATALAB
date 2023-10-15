@@ -163,8 +163,8 @@ class MZDN_HF:
     tX, tY = [], []
 
     if(treinamento):  
-      self.scalers_x = RobustScaler()
-      self.scalers_y = RobustScaler()
+      self.scalers_x = MinMaxScaler(clip=True)
+      self.scalers_y = MinMaxScaler(clip=True)
       tX = self.scalers_x.fit_transform(X)
       tY = self.scalers_y.fit_transform(Y)
 
