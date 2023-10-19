@@ -1,2 +1,0 @@
-nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
-modelos/AX_AYsp/MAE_ENCDECBID_BAT32_DOUT0_HL10_BCKW48,0,499,0.0444,0.0535,0.0444,0.0535,0.0526,"['1.8323', '9.2214', '0.8264', '406.9363']"
