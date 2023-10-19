@@ -3,7 +3,7 @@ from tensorflow.keras.models         import *
 from tensorflow                      import keras
 from tensorflow.keras                import layers
 from tensorflow.keras.callbacks      import EarlyStopping, ModelCheckpoint 
-from sklearn.preprocessing           import RobustScaler, StandardScaler, MinMaxScaler
+from sklearn.preprocessing           import RobustScaler
 from sklearn.model_selection         import train_test_split
 from sklearn.metrics                 import mean_squared_error as mse, mean_absolute_error as mae
 import gc, joblib, csv, math, pandas as pd, numpy as np, os
@@ -134,10 +134,10 @@ class MZDN_HF:
   def salva_distribuicao(self, dataset, path):
     # Uma linha da img p/ cada grandeza ("column"). Uma coluna da img p/ descrição
     fg, ax = plt.subplots( nrows = len(dataset.columns), ncols=2, figsize=(7, 11), gridspec_kw={'width_ratios':[3, 1]}) 
-
+    bins = [350,350,350,50,50]
     for i, col in enumerate(dataset.columns.values):
       p = dataset[col].copy()
-      ax[i, 0].hist(p, label = col, bins=2000)
+      ax[i, 0].hist(p, label = col, bins=bins[i])
       ax[i, 0].legend()
       ax[i, 1].text(0,0, str(pd.DataFrame(p).describe()))
       ax[i, 1].set_xticks([])
@@ -163,8 +163,8 @@ class MZDN_HF:
     tX, tY = [], []
 
     if(treinamento):  
-      self.scalers_x = MinMaxScaler(clip=True)
-      self.scalers_y = MinMaxScaler(clip=True)
+      self.scalers_x = RobustScaler()
+      self.scalers_y = RobustScaler()
       tX = self.scalers_x.fit_transform(X)
       tY = self.scalers_y.fit_transform(Y)
 
@@ -288,6 +288,7 @@ class MZDN_HF:
     X_test    = np.array([self.scalers_x.inverse_transform(x)  for x  in XY_t_test[0]])
     Y_test    = np.array([self.scalers_y.inverse_transform(y)  for y  in XY_t_test[1]])
     Y_pred    = np.array([self.scalers_y.inverse_transform(yp) for yp in self.modelo.predict(XY_t_test[0])])
+    print(Y_pred)
     for i, grandeza in enumerate(self.hp.grandezas[1]):
       Y_test_plano = Y_test[:,:,i].reshape(-1)
       Y_pred_plano = Y_pred[:,:,i].reshape(-1)
