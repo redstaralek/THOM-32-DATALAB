@@ -213,17 +213,16 @@ class MZDN_HF:
   #endregion
   
   #region ARQUITETURAS LSTM
-  # encoder-decoder necessário pois se trata de um seq2seq com tamanhos assimétricos. Uma LSTM simples não funcionaria.
+  
+  # INPUT ===> dpout? => [[LSTM (enc)]] => [[LSTM (dec)]] => [[DENSE]] ===> OUTPUT
   def __lstm_encoder_decoder(self, bidirecional):
     model = keras.Sequential() 
 
-    # Encoder (bidirectional)
-    #
-    # INPUT ===> dpout? => [[LSTM (enc)]] => dpout? => [[LSTM (dec)]] => dpout? => [[DENSE]] ===> OUTPUT
-    #
-
+    # Dropout
     if(self.hp.dropout):
       model.add(layers.Dropout(self.hp.dropout))
+
+    # Encoder (bidirectional)
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x))
@@ -233,9 +232,7 @@ class MZDN_HF:
 
     model.add(layers.RepeatVector(self.hp.steps_f))    
 
-    # Decoder (unidirectional)
-    if(self.hp.dropout):
-      model.add(layers.Dropout(self.hp.dropout))
+    # Decoder
     if(bidirecional):
       model.add(layers.Bidirectional(
         layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True)
@@ -243,9 +240,7 @@ class MZDN_HF:
     else:
       model.add(layers.LSTM(self.hp.h_layers, input_shape=(self.hp.steps_b, self.hp.width_x), return_sequences=True))
 
-    # Decoder (dense output)
-    if(self.hp.dropout):
-      model.add(layers.Dropout(self.hp.dropout))
+    # Timedistributed Dense output
     model.add(layers.TimeDistributed(layers.Dense(self.hp.width_y)))   
 
     return model

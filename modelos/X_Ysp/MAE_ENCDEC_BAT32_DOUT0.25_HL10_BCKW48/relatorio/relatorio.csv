@@ -1,0 +1,2 @@
+nome,parada,melhorEpoch,erro_treino_parada,erro_valid_parada,erro_treino_melhor,erro_valid_melhor,erro_teste_melhor,rmse_unscaled_por_grandeza
+modelos/X_Ysp/MAE_ENCDEC_BAT32_DOUT0.25_HL10_BCKW48,343,294,0.1788,0.2058,0.1804,0.2040,0.2039,"['1.6997', '9.3893', '0.9565', '425.6814']"
