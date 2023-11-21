@@ -1,5 +1,6 @@
 import math, csv, datetime, argparse
 from timeseries_rnn import *
+import itertools
 
 def parse_args():
     parser = argparse.ArgumentParser(description="")
@@ -32,7 +33,8 @@ def printa_grafico_grupos(grupo_key, filter_hl=None):
     return mae, param
 
 def main(args):
-
+    
+    marker = itertools.cycle(('o', '*', 'v', 's', 'p', '1'))
     if(args.rank_models == "True"):
         # print tabela
         print("Gerando ranking de modelos!")
@@ -42,53 +44,76 @@ def main(args):
                 print(el)
         return
     elif(args.stat_DOUT == "True"):
-        print("Gerando gráfico MAE x dropout.")
+        print("Gerando gráfico MAE x Dropout (DOUT)")
         fg, ax = plt.subplots()
-        mae, param = printa_grafico_grupos("dropout")
-        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
-        # repete para cada hidden layer
         hls = [10, 50, 100, 150]
+        maes_0, maes_025, maes_050 = [], [], []
         for hl in hls:
-            mae, param = printa_grafico_grupos("dropout", hl)
-            ax.plot(np.array(param), np.array(mae), marker='o', label=hl)
+            mae, _ = printa_grafico_grupos("dropout", hl)
+            maes_0.append(mae[0])
+            maes_025.append(mae[1])
+            maes_050.append(mae[2])
+
+        ax.plot(np.array(hls), np.array(maes_0),   marker=next(marker), label="0")
+        ax.plot(np.array(hls), np.array(maes_025), marker=next(marker), label="0.25")
+        ax.plot(np.array(hls), np.array(maes_050), marker=next(marker), label="0.5")
         ax.legend()
-        ax.xaxis.set_ticks([0, 0.25, 0.5])
-        ax.set_title("MAE x Dropout")
-        fg.savefig("relatorios_gerais/DOUT.pdf")
-        fg.savefig("relatorios_gerais/DOUT.png")
+        ax.xaxis.set_ticks(hls)
+        ax.set_title("MAE x HL por dropout (DOUT)")
+        fg.savefig("relatorios_gerais/dropout.pdf")
+        fg.savefig("relatorios_gerais/dropout.png")
         plt.show()
         return
     elif(args.stat_HL == "True"):
-        print("Gerando gráfico MAE x HL.")
+        print("Gerando gráfico MAE x Hidden Layers (HL)")
         fg, ax = plt.subplots()
         mae, param = printa_grafico_grupos("hidden_layers")
-        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
+        ax.plot(np.array(param), np.array(mae), marker=next(marker), label="geral")
         ax.legend()
         ax.xaxis.set_ticks([10, 50, 100, 150])
-        ax.set_title("MAE x Janelamento")
+        ax.set_title("MAE x Hidden Layers (HL)")
         fg.savefig("relatorios_gerais/hidden_layers.pdf")
         fg.savefig("relatorios_gerais/hidden_layers.png")
         plt.show()
         return
     elif(args.stat_BCW == "True"):
-        print("Gerando gráfico MAE x back_window.")
+        print("Gerando gráfico MAE x Janelamento traseiro (BID)")
         fg, ax = plt.subplots()
-        mae, param = printa_grafico_grupos("back_window")
-        ax.plot(np.array(param), np.array(mae), marker='o', label="geral")
-        # repete para cada hidden layer
         hls = [10, 50, 100, 150]
+        maes_24, maes_48 = [], []
         for hl in hls:
-            mae, param = printa_grafico_grupos("back_window", hl)
-            ax.plot(np.array(param), np.array(mae), marker='o', label=hl)
+            mae, _ = printa_grafico_grupos("back_window", hl)
+            maes_24.append(mae[0])
+            maes_48.append(mae[1])
+
+        ax.plot(np.array(hls), np.array(maes_24), marker=next(marker), label="24")
+        ax.plot(np.array(hls), np.array(maes_48), marker=next(marker), label="48")
         ax.legend()
-        ax.xaxis.set_ticks([24, 48])
-        ax.set_title("MAE x Janelamento")
+        ax.xaxis.set_ticks(hls)
+        ax.set_title("MAE x HL por Janelamento traseiro (BCW)")
         fg.savefig("relatorios_gerais/back_window.pdf")
         fg.savefig("relatorios_gerais/back_window.png")
         plt.show()
         return
-    # TODO: print e salva gráfico MAE x HL
-    # TODO: print e salva gráfico MAE x arq
+    elif(args.stat_BID == "True"):
+        print("Gerando gráfico MAE x Bidirecionalidade (BID)")
+        fg, ax = plt.subplots()
+        hls = [10, 50, 100, 150]
+        maes_uni, maes_bid = [], []
+        for hl in hls:
+            mae, _ = printa_grafico_grupos("arq", hl)
+            maes_uni.append(mae[0])
+            maes_bid.append(mae[1])
+
+        ax.plot(np.array(hls), np.array(maes_uni), marker=next(marker), label="Unidirecional")
+        ax.plot(np.array(hls), np.array(maes_bid), marker=next(marker), label="Bidirecional")
+        ax.legend()
+        ax.xaxis.set_ticks(hls)
+        ax.set_title("MAE x HL por Bidirecionalidade (BID)")
+        fg.savefig("relatorios_gerais/arq.pdf")
+        fg.savefig("relatorios_gerais/arq.png")
+        plt.show()
+        return
 
     X = []
     with open(args.arquivo) as _csv:
